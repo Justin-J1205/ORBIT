@@ -18,6 +18,7 @@ interface MyBookingsSectionProps {
   isUserBookingsFetching: boolean;
   itemsPerPage: number;
   openBookingModal: (facilityId?: number, start?: Date, end?: Date) => void;
+  onRescheduleBooking: (booking: any) => void;
   getBookingStatus: (booking: any) => { label: string; badgeClass: string };
   getFacilityDisplay: (facilityId: number) => string;
   openOthers: Record<string, boolean>;
@@ -72,6 +73,7 @@ export function MyBookingsSection({
   isUserBookingsFetching,
   itemsPerPage,
   openBookingModal,
+  onRescheduleBooking,
   getBookingStatus,
   getFacilityDisplay,
   openOthers,
@@ -329,6 +331,15 @@ export function MyBookingsSection({
                                 : "Cancelled by you"
                               : status.label}
                           </span>
+                          {booking.userId === user?.id && (booking.status === 'pending' || (booking.status === 'approved' && new Date(booking.startTime) > new Date())) && (
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); onRescheduleBooking(booking); }}
+                              className="px-2.5 py-1 text-pink-700 text-[11px] font-medium rounded-md border border-pink-200 hover:bg-pink-50 transition-colors whitespace-nowrap"
+                            >
+                              Reschedule
+                            </button>
+                          )}
                           {(canCancelBooking(booking) && booking.userId === user?.id) && (
                             <div className="flex flex-col gap-1">
                               {canCancelBooking(booking) && booking.userId === user?.id && (

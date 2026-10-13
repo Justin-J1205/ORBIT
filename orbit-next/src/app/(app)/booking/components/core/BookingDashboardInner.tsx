@@ -148,7 +148,7 @@ export function BookingDashboardInner() {
   const sidebarItems = generateSidebarItems(user);
   
   // Create handler functions with proper closures
-  const openBookingModal = createOpenBookingModal(
+  const openNewBookingModal = createOpenBookingModal(
     facilities,
     availabilityMap,
     todayDateStr,
@@ -159,6 +159,17 @@ export function BookingDashboardInner() {
     bookingModalState.setInitialEndForBooking,
     bookingModalState.setShowBookingModal
   );
+  const openBookingModal = async (facilityId?: number, start?: Date, end?: Date) => {
+    bookingModalState.setBookingToEdit(null);
+    await openNewBookingModal(facilityId, start, end);
+  };
+  const handleRescheduleBooking = (booking: any) => {
+    bookingModalState.setBookingToEdit(booking);
+    bookingModalState.setSelectedFacilityForBooking(Number(booking.facilityId));
+    bookingModalState.setInitialStartForBooking(new Date(booking.startTime));
+    bookingModalState.setInitialEndForBooking(new Date(booking.endTime));
+    bookingModalState.setShowBookingModal(true);
+  };
   
   const handleSidebarClick = createSidebarClickHandler(
     setLocation,
@@ -350,6 +361,7 @@ export function BookingDashboardInner() {
             isUserBookingsFetching={isUserBookingsFetching}
             itemsPerPage={ITEMS_PER_PAGE}
             openBookingModal={openBookingModal}
+            onRescheduleBooking={handleRescheduleBooking}
             getBookingStatus={getBookingStatus}
             getFacilityDisplay={(id) => getFacilityDisplay(id, facilities, campuses)}
             openOthers={viewState.openOthers}
@@ -413,6 +425,7 @@ export function BookingDashboardInner() {
         initialStartTime={bookingModalState.initialStartForBooking}
         initialEndTime={bookingModalState.initialEndForBooking}
         showSuggestedSlot={bookingModalState.initialTimesAreSuggested}
+        bookingToEdit={bookingModalState.bookingToEdit}
       />
       
       <CancellationModal

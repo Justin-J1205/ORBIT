@@ -13,10 +13,6 @@ const nextConfig: NextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
-  // Skip ESLint during build
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
   
   webpack: (config, { isServer, webpack }) => {
     if (isServer && webpack) {

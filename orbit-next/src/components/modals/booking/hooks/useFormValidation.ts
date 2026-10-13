@@ -17,7 +17,7 @@ export interface FormValidationParams {
   facilities: Facility[];
   allBookings: any[];
   userEmail?: string;
-  existingBookingId?: number;
+  existingBookingId?: number | string;
   isAdmin?: boolean;
 }
 

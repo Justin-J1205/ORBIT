@@ -18,6 +18,7 @@ interface ContentRendererProps {
   isUserBookingsFetching: boolean;
   itemsPerPage: number;
   openBookingModal: (facilityId?: number, start?: Date, end?: Date) => Promise<void>;
+  onRescheduleBooking: (booking: any) => void;
   getBookingStatus: (booking: any) => { label: string; badgeClass: string };
   getFacilityDisplay: (facilityId: number) => string;
   openOthers: Record<string, boolean>;
@@ -87,6 +88,7 @@ export function ContentRenderer(props: ContentRendererProps) {
           isUserBookingsFetching={props.isUserBookingsFetching}
           itemsPerPage={props.itemsPerPage}
           openBookingModal={props.openBookingModal}
+          onRescheduleBooking={props.onRescheduleBooking}
           getBookingStatus={props.getBookingStatus}
           getFacilityDisplay={props.getFacilityDisplay}
           openOthers={props.openOthers}
