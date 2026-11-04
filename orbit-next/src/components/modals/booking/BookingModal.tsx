@@ -16,11 +16,14 @@ interface BookingModalProps {
   initialStartTime?: Date | null;
   initialEndTime?: Date | null;
   showSuggestedSlot?: boolean;
+  bookingToEdit?: any;
 }
 
 export default function BookingModal(props: BookingModalProps) {
   // Key forces full remount when modal opens with a new facility,
   // ensuring useForm defaults and local state are always fresh.
-  const mountKey = props.isOpen ? `open-${props.selectedFacilityId ?? 'none'}` : 'closed';
+  const mountKey = props.isOpen
+    ? `open-${props.bookingToEdit?.id ?? props.selectedFacilityId ?? 'none'}`
+    : 'closed';
   return <BookingModalContent key={mountKey} {...props} />;
 }

@@ -1,0 +1,114 @@
+98e389c | Justin R. P. | 2026-07-21 | Add schema.sql to src/db
+215e37b | nnavarro2024-2025 | 2026-04-14 | Update
+f309359 | nnavarro2024-2025 | 2026-04-14 | Update
+47a2e00 | nnavarro2024-2025 | 2026-04-13 | 4/13/26_11:53 PM
+84d9258 | nnavarro2024-2025 | 2026-04-13 | Update 4/13/26_11:45 AM
+1e04d64 | nnavarro2024-2025 | 2026-04-13 | 4/13/26 2:17 AM
+98282bc | nnavarro2024-2025 | 2026-04-12 | 4/12/26 | 11:22PM
+243b079 | nnavarro2024-2025 | 2026-04-12 | Update 4/12/26 | 4:09 AM
+5b04df7 | nnavarro2024-2025 | 2026-04-08 | 4/8/26 12PM
+39b3a86 | nnavarro2024-2025 | 2026-04-08 | Update 4/8/26
+5588cec | nnavarro2024-2025 | 2026-03-26 | Update 3/26/26
+f96ce81 | nnavarro2024-2025 | 2026-03-26 | Update 3/26/2026
+d861079 | nnavarro2024-2025 | 2026-03-21 | ORBIT 3/21/26
+7143330 | nnavarro2024-2025 | 2026-03-17 | Update 3/17/26_6:44AM
+6fcafeb | nnavarro2024-2025 | 2026-03-17 | ORBIT_3.17.26
+9ce106c | nnavarro2024-2025 | 2026-03-17 | ORBIT_3.17.26
+5183d73 | nnavarro2024-2025 | 2026-03-16 | Update AvailableRoomsSection.tsx
+1414e24 | nnavarro2024-2025 | 2026-03-15 | Update 3.15.26
+c691e10 | James Lemuel | 2026-02-20 | security: remove .env from tracking and fix .gitignore
+63cd667 | James Lemuel | 2026-02-20 | message
+2e84e2c | James Lemuel | 2026-02-20 | message
+dbccabe | James Lemuel | 2025-11-26 | refactor: Massive codebase refactoring - 99% modal reduction and clean architecture
+a62b45e | James Lemuel | 2025-11-26 | your commit message
+446c97a | James Lemuel | 2025-11-26 | your commit message
+21c8862 | James Lemuel | 2025-11-25 | your commit message
+186b14f | James Lemuel | 2025-11-25 | your commit message
+96ecd12 | James Lemuel | 2025-11-20 | your commit message here
+5b0ec84 | James Lemuel | 2025-11-15 | Test
+5041fb9 | James Lemuel | 2025-11-14 | your commit message
+6a1eabc | James Lemuel | 2025-11-14 | your commit message
+a55f763 | James Lemuel | 2025-11-14 | your commit message
+c3ddecd | James Lemuel | 2025-11-14 | your commit message
+f5dc5ab | James Lemuel | 2025-11-14 | your commit message
+a195850 | James Lemuel | 2025-11-14 | Implemented skeleton loading screen similar to Google/Facebook
+164341f | James Lemuel | 2025-11-14 | Implemented skeleton loading screen similar to Google/Facebook
+5603743 | James Lemuel | 2025-11-14 | Fixed faculty role to show only Board Room and Faculty Lounge
+e012400 | James Lemuel | 2025-11-14 | Implemented skeleton loading screen similar to Google/Facebook
+f65f8cb | James Lemuel | 2025-11-13 | Phase 1: Complete booking workflow polish (duration guards, slot locking, error handling, toasts)
+7555cfe | James Lemuel | 2025-11-13 | your commit message
+822c517 | James Lemuel | 2025-11-12 | your commit message
+bde210a | James Lemuel | 2025-11-09 | Prepare Vercel deployment configuration
+5fdc616 | James Lemuel | 2025-11-09 | Configure Vercel deployment with environment checks
+80f6913 | James Lemuel Rabang | 2025-10-29 | Merge pull request #1 from Kusa331/main
+ab9bb09 | Ken Usa | 2025-10-29 | Update Firebase project to orbit-lms1 and configure CORS
+5b1022c | Ken Usa | 2025-10-29 | Deploy to Railway: Update configuration, add deployment docs and scripts
+48ee3fe | James Lemuel | 2025-10-29 | your message here
+129f449 | James Lemuel | 2025-10-29 | chore: add auth debug logs and client 401 retry; warn if PORT unset
+d8a2a84 | James Lemuel | 2025-10-29 | chore: add warning if process.env.PORT is not set for Railway deployment
+50bc658 | James Lemuel | 2025-10-29 | fix: ensure backend uses process.env.PORT for Railway and local dev
+e0edb70 | James Lemuel | 2025-10-29 | chore: ensure backend routes are deployed
+cea4aef | James Lemuel | 2025-10-28 | fix(auth): always return { user } from /api/auth/sync and add debug logging
+e12a05a | James Lemuel | 2025-10-28 | fix(auth): always return { user } from /api/auth/sync and add debug logging
+8c56726 | James Lemuel | 2025-10-28 | Fix: build.js now builds both client and server for Railway
+b3e670c | James Lemuel | 2025-10-28 | Fix: explicit CORS preflight handling for Railway
+607666d | James Lemuel | 2025-10-28 | Fix CORS: allow only https://orbit-lms.web.app
+ff58b6f | James Lemuel | 2025-10-27 | your commit message
+c5dea55 | James Lemuel | 2025-10-23 | Update vercel.json
+8207ceb | James Lemuel | 2025-10-23 | Initial commit
+46fc032 | James Lemuel | 2025-10-22 | Your commit message here
+134d5fa | James Lemuel | 2025-10-17 | Save
+9ef423c | James Lemuel | 2025-09-18 | feat: allow rebooking after end; header bell dismiss + 5-item limit; add mark-read in notification logs; show no-notifications message
+55878c0 | James Lemuel | 2025-09-17 | Dashboard: show Booking History in Recent Booking card (5 items, no pagination); fix Activity Logs previews; typecheck cleanups
+f12b112 | James Lemuel | 2025-09-15 | chore(ui): update booking guidelines & terms, remove email notifications UI; improve notification/admin deep-link handling
+af99701 | James Lemuel | 2025-09-14 | feat(admin): add pagination to Admin Activity Logs (10 items per page)
+5a28b8c | James Lemuel | 2025-09-14 | chore(admin): unify admin UI cards and previews; rename Pending Bookings  Booking Requests; fix JSX syntax
+a84ac36 | James Lemuel | 2025-09-14 | fix
+040b86c | James Lemuel | 2025-09-14 | UI: Admin dashboard  recent alerts/cards styling and status badges; add Admin Activity Logs sidebar item
+b1845c4 | James Lemuel | 2025-09-14 | booking: prevent overlapping bookings; admin alerts on cancel/end; fix admin unavailable text; show scheduled time ranges
+3765064 | James Lemuel | 2025-09-13 | Booking modal: tighten 'Others' input layout, auto-check behavior; add dev-safe schema guard; add migration 0005 for equipment JSONB
+0d70f10 | James Lemuel | 2025-09-13 | fix: BookingDashboard JSX + header notifications redirect
+28f653c | James Lemuel | 2025-09-13 | admin: update overview tiles icons, unify booking UI, sidebar helper and pagination fixes
+7640110 | James Lemuel | 2025-09-12 | Fix: redirect admins to /admin after login
+8f24243 | James Lemuel | 2025-09-12 | UI: UIC Create Account modal; sidebar logout toasts; EditBookingModal descriptions & participants capacity; dashboard emoji; select availability wiring; header non-clickable
+da503e1 | James Lemuel | 2025-09-12 | chore(ui): remove ORBIT label and sidebar logo
+87444e4 | James Lemuel | 2025-09-09 | Add comprehensive booking guidelines and fix system branding - Added detailed guidelines in booking settings with requirements, time management, group policies, conduct rules, and cancellation policies - Fixed computer station references in booking system (changed to study rooms) - Updated system branding from 'Revolutionizing Campus Technology' to 'Enhancing Library Experience' - Enhanced UI with professional guidelines layout and consistent library-focused messaging
+c64ee7a | James Lemuel | 2025-09-08 | fix: Add all missing Radix UI dependencies for complete Vercel build
+5a26035 | James Lemuel | 2025-09-08 | fix: Add missing date-fns dependency for Vercel deployment
+74a9037 | James Lemuel | 2025-09-08 | fix: Add missing @radix-ui/react-tooltip dependency for Vercel deployment
+37c8cef | James Lemuel | 2025-09-08 | fix: Fix footer layout issues in Login and BannedUser pages
+a8e1ecb | James Lemuel | 2025-09-08 | feat: Add developer credits to Admin Dashboard and Banned User page
+218dda7 | James Lemuel | 2025-09-08 | fix: Improve developer credits visibility and fix footer display
+be7531b | James Lemuel | 2025-09-08 | feat: Add comprehensive developer credits and branding
+358d142 | James Lemuel | 2025-09-08 | docs: Update README with proper ORBIT project documentation
+f420a3f | James Lemuel | 2025-09-08 | Complete system cleanup and optimization
+40750b8 | James Lemuel | 2025-08-24 | Deploy-ready version
+85de796 | James Lemuel | 2025-08-24 | Deploy-ready version
+c2fc67f | James Lemuel | 2025-08-24 | Fix pending bookings route and remove admin stats method
+cf19de1 | James Lemuel | 2025-08-24 | Update: loosened access for testing
+9cdc2c3 | James Lemuel | 2025-08-24 | update admin dashboard
+e418302 | James Lemuel | 2025-08-24 | Update admin dashboard
+7920d11 | James Lemuel | 2025-08-24 | Update admin dashboard
+992c988 | James Lemuel | 2025-08-24 | Update admin dashboard
+cbc49b6 | James Lemuel | 2025-08-11 | fix: allow all CORS origins dynamically for Vercel deployment
+fe665e9 | James Lemuel | 2025-08-11 | fix: allow all origins for CORS globally (for testing/prototyping)
+ce696ff | James Lemuel | 2025-08-11 | Initial commit
+31eb52e | James Lemuel | 2025-08-10 | Your commit message here
+0aafca7 | James Lemuel | 2025-08-10 | Your commit message here
+2fcc5c6 | James Lemuel | 2025-08-10 | Add CORS allowed origins update
+cf6bd22 | James Lemuel | 2025-08-10 | Update Tailwind CSS setup
+a58f7fe | James Lemuel | 2025-08-10 | message
+0af509c | James Lemuel | 2025-08-05 | Initial commit
+f861f94 | James Lemuel | 2025-08-05 | Fix deployment
+687d8d8 | James Lemuel | 2025-07-23 | Fix Vercel runtime version and encoded DB URL
+10f19ad | James Lemuel | 2025-07-23 | Update vercel.json config for Vercel
+564e14e | James Lemuel | 2025-07-23 | Update: made some changes to the project
+e2ff3fc | James Lemuel | 2025-07-23 | Trigger redeploy
+7662482 | James Lemuel | 2025-07-23 | Trigger redeploy
+b853fab | James Lemuel | 2025-07-23 | fix vercel deployment config
+5bc2e54 | James Lemuel | 2025-07-23 | Initial commit
+9c5e43b | James Lemuel | 2025-07-17 | Initial commit
+83711bf | jrabang22000000 | 2025-07-17 | Prepare the ORBIT system for deployment on Vercel with Supabase
+f64c135 | jrabang22000000 | 2025-07-17 | Set up core project structure and essential UI components for the app
+fd0ef23 | jrabang22000000 | 2025-07-17 | Initial commit
+de84e93 | james-hub21 | 2025-07-17 | Initial commit

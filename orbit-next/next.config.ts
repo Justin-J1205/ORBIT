@@ -1,6 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  turbopack: {},
   experimental: {
     externalDir: true,
   },
@@ -13,11 +14,6 @@ const nextConfig: NextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
-  // Skip ESLint during build
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
-  
   webpack: (config, { isServer, webpack }) => {
     if (isServer && webpack) {
       // Inject JSON.parse patch at the very beginning of every server bundle

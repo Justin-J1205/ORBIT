@@ -50,12 +50,21 @@ export async function POST(
     const start = new Date(booking.startTime);
     const end = new Date(booking.endTime);
     const isActiveApproved = booking.status === "approved" && start <= now && now <= end;
-    const isUpcomingApproved = booking.status === "approved" && start > now;
-    const canCancel = booking.status === "pending" || isActiveApproved || isUpcomingApproved;
+    const isUpcomingApproved = booking.status === "approved" && start > now && end > now;
+    const arrivalDeadline = booking.arrivalConfirmationDeadline
+      ? new Date(booking.arrivalConfirmationDeadline)
+      : null;
+    const canAutoCancelForArrivalTimeout = isArrivalTimeout
+      && booking.status === "approved"
+      && !booking.arrivalConfirmed
+      && arrivalDeadline !== null
+      && !Number.isNaN(arrivalDeadline.getTime())
+      && arrivalDeadline <= now;
+    const canCancel = booking.status === "pending" || isUpcomingApproved || canAutoCancelForArrivalTimeout;
 
     if (!canCancel) {
       return NextResponse.json(
-        { message: "Only pending, upcoming, or active approved bookings can be cancelled." },
+        { message: "Only pending or upcoming bookings can be cancelled." },
         { status: 400 }
       );
     }

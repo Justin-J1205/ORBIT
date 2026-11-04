@@ -327,10 +327,7 @@ export function canCancelBooking(booking: any): boolean {
     const end = new Date(booking.endTime);
     
     if (booking.status === 'pending') return true;
-    if (booking.status === 'approved') {
-      if (start > now) return true;
-      if (start <= now && now <= end) return true;
-    }
+    if (booking.status === 'approved' && start > now && end > now) return true;
     return false;
   } catch (e) {
     return false;

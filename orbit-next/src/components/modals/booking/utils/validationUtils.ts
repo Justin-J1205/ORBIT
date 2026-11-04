@@ -25,7 +25,7 @@ export interface BookingValidationData {
   purpose?: string;
   participants?: number;
   allBookings?: any[];
-  existingBookingId?: number;
+  existingBookingId?: number | string;
   isAdmin?: boolean;
 }
 
@@ -169,7 +169,7 @@ export function validateBookingForm(
     hasEndTime: !!data.endTime,
   });
   
-  if (data.allBookings && data.facilityId && data.startTime && data.endTime) {
+  if (!data.isAdmin && data.allBookings && data.facilityId && data.startTime && data.endTime) {
     const facilityIdNum = parseInt(data.facilityId, 10);
     console.log('[Validation] Checking conflicts:', {
       facilityId: facilityIdNum,
@@ -179,7 +179,7 @@ export function validateBookingForm(
     });
     const conflictingBookings = data.allBookings.filter((booking: any) => {
       // Skip the current booking if editing
-      if (data.existingBookingId && booking.id === data.existingBookingId) {
+      if (data.existingBookingId && String(booking.id) === String(data.existingBookingId)) {
         return false;
       }
 
@@ -242,7 +242,7 @@ export function validateBookingForm(
     const tgtDate = data.startTime;
     const todayCount = data.allBookings.filter((b: any) => {
       if (b.status === 'cancelled' || b.status === 'denied') return false;
-      if (data.existingBookingId && b.id === data.existingBookingId) return false;
+      if (data.existingBookingId && String(b.id) === String(data.existingBookingId)) return false;
       const bStart = new Date(b.startTime);
       return (
         bStart.getFullYear() === tgtDate.getFullYear() &&

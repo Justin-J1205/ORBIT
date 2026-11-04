@@ -9,12 +9,14 @@ export function useBookingModalState() {
   const [initialStartForBooking, setInitialStartForBooking] = useState<Date | null>(null);
   const [initialEndForBooking, setInitialEndForBooking] = useState<Date | null>(null);
   const [initialTimesAreSuggested, setInitialTimesAreSuggested] = useState<boolean>(false);
+  const [bookingToEdit, setBookingToEdit] = useState<any>(null);
 
   const closeBookingModal = () => {
     setShowBookingModal(false);
     setSelectedFacilityForBooking(null);
     setInitialStartForBooking(null);
     setInitialEndForBooking(null);
+    setBookingToEdit(null);
   };
 
   return {
@@ -28,6 +30,8 @@ export function useBookingModalState() {
     setInitialEndForBooking,
     initialTimesAreSuggested,
     setInitialTimesAreSuggested,
+    bookingToEdit,
+    setBookingToEdit,
     closeBookingModal,
   };
 }

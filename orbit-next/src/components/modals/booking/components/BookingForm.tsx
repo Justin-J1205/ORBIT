@@ -56,9 +56,13 @@ function mergeBookedSlots(slots: any[]): BookedBlock[] {
   return blocks;
 }
 
+// 1. Define the helper function at the top level of your file (outside any component)
+const isValidDate = (d: any): d is Date => d instanceof Date && !isNaN(d.getTime());
+
+// 2. Use it cleanly inside your component
 function FacilityDayList({ facilityId, selectedDate }: { facilityId: number; selectedDate?: Date }) {
   const { user } = useAuth();
-  const dateStr = selectedDate ? format(selectedDate, 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd');
+  const dateStr = isValidDate(selectedDate) ? format(selectedDate, 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd');
   const displayDate = format(new Date(`${dateStr}T12:00:00`), 'EEEE, MMMM d, yyyy');
 
   const { data, isLoading } = useQuery<{ data: any[] }>({
@@ -159,6 +163,7 @@ interface BookingFormProps {
   slotManagement: any;
   selectedFacility: any;
   isAdmin?: boolean;
+  isEditing?: boolean;
 }
 
 export function BookingForm({
@@ -174,6 +179,7 @@ export function BookingForm({
   validationWarnings,
   selectedFacility,
   isAdmin = false,
+  isEditing = false,
 }: BookingFormProps) {
   // Detect daily booking limit warning in validationWarnings
   const hasDailyLimitError = validationWarnings.some(w => w.title === 'Daily Booking Limit Reached');
@@ -223,30 +229,49 @@ export function BookingForm({
     }
   }, [selectedCampus]);
 
-  // Sync endTime whenever startTime changes
-  useEffect(() => {
-    if (!startTime) return;
-    // Always reset to start + 2h, capped at 7:00 PM
-    const defaultEnd = new Date(startTime.getTime() + MAX_BOOKING_MS);
-    const opLimit = new Date(startTime); opLimit.setHours(19, 0, 0, 0);
-    const newEnd = defaultEnd > opLimit ? opLimit : defaultEnd;
-    form.setValue('endTime', newEnd);
-  }, [startTime?.getTime()]);
+// Helper to check if a date is valid
+const isValidDate = (d: any): d is Date => d instanceof Date && !isNaN(d.getTime());
 
-  // Reset participants to 1 when facility changes
-  useEffect(() => {
-    form.setValue('participants', 1);
-  }, [facilityIdWatched]);
+// Preserve the supplied end time on mount; adjust it only after a start edit.
+const previousStartTime = useRef<number | null>(null);
+useEffect(() => {
+  if (!isValidDate(startTime)) return;
+  const currentStart = startTime.getTime();
+  if (previousStartTime.current === null) {
+    previousStartTime.current = currentStart;
+    return;
+  }
+  if (previousStartTime.current === currentStart) return;
+  previousStartTime.current = currentStart;
 
-  const { data: equipmentAvailability } = useQuery<Array<{ key: string; label: string; totalCount: number; bookedCount: number; available: number }>>({
-    queryKey: ['/api/equipment/availability', startTime?.toISOString(), endTime?.toISOString()],
-    queryFn: async () => {
-      const res = await apiRequest('GET', `/api/equipment/availability?startTime=${encodeURIComponent(startTime!.toISOString())}&endTime=${encodeURIComponent(endTime!.toISOString())}`);
-      return res.json();
-    },
-    enabled: !!(selectedCampus && startTime && endTime && startTime < endTime),
-    staleTime: 30_000,
-  });
+  // Always reset to start + 2h, capped at 7:00 PM
+  const defaultEnd = new Date(startTime.getTime() + MAX_BOOKING_MS);
+  const opLimit = new Date(startTime); opLimit.setHours(19, 0, 0, 0);
+  const newEnd = defaultEnd > opLimit ? opLimit : defaultEnd;
+  form.setValue('endTime', newEnd);
+}, [isValidDate(startTime) ? startTime.getTime() : null]);
+
+// Preserve participant count on mount and reset it only after a facility change.
+const previousFacilityId = useRef(facilityIdWatched);
+useEffect(() => {
+  if (previousFacilityId.current === facilityIdWatched) return;
+  previousFacilityId.current = facilityIdWatched;
+  form.setValue('participants', 1);
+}, [facilityIdWatched]);
+
+const { data: equipmentAvailability } = useQuery<Array<{ key: string; label: string; totalCount: number; bookedCount: number; available: number }>>({
+  queryKey: [
+    '/api/equipment/availability', 
+    isValidDate(startTime) ? startTime.toISOString() : null, 
+    isValidDate(endTime) ? endTime.toISOString() : null
+  ],
+  queryFn: async () => {
+    const res = await apiRequest('GET', `/api/equipment/availability?startTime=${encodeURIComponent(startTime!.toISOString())}&endTime=${encodeURIComponent(endTime!.toISOString())}`);
+    return res.json();
+  },
+  enabled: !!(selectedCampus && isValidDate(startTime) && isValidDate(endTime) && startTime < endTime),
+  staleTime: 30_000,
+});
 
   // Build a lookup: key -> available count
   const equipAvailMap = (equipmentAvailability ?? []).reduce<Record<string, number>>((acc, item) => {
@@ -255,7 +280,7 @@ export function BookingForm({
   }, {});
 
   // Conflict detection: uses cached data from FacilityDayList (same queryKey)
-  const conflictDateStr = startTime ? format(startTime, 'yyyy-MM-dd') : null;
+  const conflictDateStr = isValidDate(startTime) ? format(startTime, 'yyyy-MM-dd') : null;
   const { data: conflictAvailData } = useQuery<{ data: any[] }>({
     queryKey: ['/api/availability', conflictDateStr ?? ''],
     queryFn: async () => {
@@ -330,8 +355,8 @@ export function BookingForm({
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
         <DialogHeader>
-          <DialogTitle className="text-xl sm:text-2xl font-semibold">Create Booking</DialogTitle>
-          <DialogDescription>Book a facility for your event or meeting.</DialogDescription>
+          <DialogTitle className="text-xl sm:text-2xl font-semibold">{isEditing ? 'Reschedule Booking' : 'Create Booking'}</DialogTitle>
+          <DialogDescription>{isEditing ? 'Update the date, time, or details for this booking.' : 'Book a facility for your event or meeting.'}</DialogDescription>
         </DialogHeader>
 
         {/* Booking Policies */}
@@ -426,7 +451,7 @@ export function BookingForm({
         {selectedCampus && facilityIdWatched ? (
           <div className="border rounded-lg p-4 bg-gray-50 min-h-[140px] transition-all duration-200">
             <p className="text-[11px] font-semibold text-gray-800 uppercase tracking-wide mb-3">
-              Current reservations{startTime ? ` on ${format(startTime, 'MMM d, yyyy')}` : ''}
+              Current reservations {isValidDate(startTime) ? `on ${format(startTime, 'MMM d, yyyy')}` : ''}
             </p>
             <FacilityDayList
               facilityId={parseInt(facilityIdWatched)}
@@ -453,11 +478,12 @@ export function BookingForm({
                       type="date"
                       min={minDate}
                       className={startDateHasError ? 'border-red-500 focus-visible:ring-red-400' : ''}
-                      value={field.value ? new Date(field.value.getTime() - field.value.getTimezoneOffset() * 60000).toISOString().slice(0, 10) : ''}
+                      value={isValidDate(field.value) ? format(field.value, 'yyyy-MM-dd') : ''}
                       onChange={(e) => {
-                        const currentTime = field.value || new Date();
-                        const newDate = new Date(e.target.value);
-                        newDate.setHours(currentTime.getHours(), currentTime.getMinutes());
+                        if (!e.target.value) return;
+                        const [year, month, day] = e.target.value.split('-').map(Number);
+                        const newDate = isValidDate(field.value) ? new Date(field.value) : new Date();
+                        newDate.setFullYear(year, month - 1, day);
                         field.onChange(newDate);
                       }}
                     />
@@ -466,12 +492,14 @@ export function BookingForm({
                     <Input
                       type="time"
                       className={startTimeHasError ? 'border-red-500 focus-visible:ring-red-400' : ''}
-                      value={field.value ? new Date(field.value.getTime() - field.value.getTimezoneOffset() * 60000).toISOString().slice(11, 16) : ''}
+                      value={isValidDate(field.value) ? format(field.value, 'HH:mm') : ''}
                       onChange={(e) => {
-                        const currentDate = field.value || new Date();
-                        const [hours, minutes] = e.target.value.split(':');
+                        if (!e.target.value) return;
+                        const currentDate = isValidDate(field.value) ? field.value : new Date();
+                        const [hours, minutes] = e.target.value.split(':').map(Number);
+                        if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return;
                         const newDate = new Date(currentDate);
-                        newDate.setHours(parseInt(hours), parseInt(minutes));
+                        newDate.setHours(hours, minutes, 0, 0);
                         field.onChange(newDate);
                       }}
                     />
@@ -501,10 +529,11 @@ export function BookingForm({
                       type="time"
                       max={isAdmin ? undefined : maxTimeStr}
                       className={endTimeHasError ? 'border-red-500 focus-visible:ring-red-400' : ''}
-                      value={field.value ? format(field.value, 'HH:mm') : ''}
+                      value={isValidDate(field.value) ? format(field.value, 'HH:mm') : ''}
                       onChange={(e) => {
-                        if (!startTime) return;
+                        if (!e.target.value || !isValidDate(startTime)) return;
                         const [hours, minutes] = e.target.value.split(':').map(Number);
+                        if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return;
                         const newEnd = new Date(startTime);
                         newEnd.setHours(hours, minutes, 0, 0);
                         field.onChange(newEnd);
@@ -643,7 +672,7 @@ export function BookingForm({
               ? 'Daily Limit Reached'
               : hasAnyTimeError && !isAdmin
               ? 'Fix Time Errors'
-              : 'Create Booking'}
+              : isEditing ? 'Save Changes' : 'Create Booking'}
           </Button>
         </DialogFooter>
       </form>

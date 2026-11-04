@@ -1,0 +1,4 @@
+* main
+  remotes/origin/HEAD -> origin/main
+  remotes/origin/copilot/vscode-mmsc3w9o-cfvg
+  remotes/origin/main

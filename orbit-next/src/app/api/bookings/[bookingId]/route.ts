@@ -9,6 +9,9 @@ import {
   formatLibraryHours,
   validateSameDay,
   refreshBooking,
+  getFacilityOrError,
+  ensureFacilityIsBookable,
+  setArrivalConfirmationDeadline,
 } from "@/server/bookings/helpers";
 import { db } from "@/server/config";
 import { facilityBookings } from "@shared/schema";
@@ -29,6 +32,9 @@ export async function PUT(
 
   try {
     const payload = await request.json();
+    if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+      return NextResponse.json({ message: "Invalid booking update body." }, { status: 400 });
+    }
     const { purpose, startTime, endTime, facilityId, participants } = payload ?? {};
 
     const existingBooking = await storage.getFacilityBooking(bookingId);
@@ -44,9 +50,21 @@ export async function PUT(
       return NextResponse.json({ message: "You are not allowed to update this booking." }, { status: 403 });
     }
 
-    if (!purpose || !startTime || !endTime || facilityId === undefined || facilityId === null) {
+    if (!isAdmin) {
+      const isUpcomingBooking = existingBooking.status === "approved"
+        && new Date(existingBooking.startTime) > new Date();
+      if (existingBooking.status !== "pending" && !isUpcomingBooking) {
+        return NextResponse.json({ message: "Only pending or upcoming bookings can be rescheduled." }, { status: 400 });
+      }
+      const protectedFields = ["status", "arrivalConfirmed", "arrivalConfirmationDeadline", "adminResponse"];
+      if (protectedFields.some((field) => Object.prototype.hasOwnProperty.call(payload, field))) {
+        return NextResponse.json({ message: "You are not allowed to change administrative booking fields." }, { status: 403 });
+      }
+    }
+
+    if (typeof purpose !== "string" || !purpose.trim() || purpose.length > 200 || !startTime || !endTime || facilityId === undefined || facilityId === null) {
       return NextResponse.json(
-        { message: "Purpose, start time, end time, and facilityId are required." },
+        { message: "A purpose of 1 to 200 characters, start time, end time, and facilityId are required." },
         { status: 400 }
       );
     }
@@ -56,6 +74,10 @@ export async function PUT(
 
     if (Number.isNaN(parsedStartTime.getTime()) || Number.isNaN(parsedEndTime.getTime())) {
       return NextResponse.json({ message: "Invalid start or end time format." }, { status: 400 });
+    }
+
+    if (!isAdmin && parsedStartTime <= new Date()) {
+      return NextResponse.json({ message: "Rescheduled bookings must start in the future." }, { status: 400 });
     }
 
     if (!isAdmin) {
@@ -86,13 +108,32 @@ export async function PUT(
       return NextResponse.json({ message: "Invalid facility id." }, { status: 400 });
     }
 
+    const parsedParticipants = Number(participants ?? existingBooking.participants);
+    if (!Number.isInteger(parsedParticipants) || parsedParticipants < 1) {
+      return NextResponse.json({ message: "Participants must be a positive whole number." }, { status: 400 });
+    }
+
+    const facilityResult = await getFacilityOrError(parsedFacilityId);
+    if (!facilityResult.ok) {
+      return NextResponse.json(facilityResult.error.body, { status: facilityResult.error.status });
+    }
+    const facility = facilityResult.value;
+    const facilityEligibility = await ensureFacilityIsBookable(
+      bookingOwnerId,
+      facility,
+      parsedParticipants,
+      parsedStartTime,
+      parsedEndTime,
+    );
+    if (!facilityEligibility.ok) {
+      return NextResponse.json(facilityEligibility.error.body, { status: facilityEligibility.error.status });
+    }
+
     // Check facility-specific duration and daily booking limits
-    const facility = await storage.getFacility(parsedFacilityId);
-    if (facility) {
-      const facilityName = facility.name.toLowerCase();
-      const isCollabRoom = facilityName.includes('collaborative learning room 1') || facilityName.includes('collaborative learning room 2');
+    const facilityName = facility.name.toLowerCase();
+    const isCollabRoom = facilityName.includes('collaborative learning room 1') || facilityName.includes('collaborative learning room 2');
       
-      if (isCollabRoom && !isAdmin) {
+    if (isCollabRoom && !isAdmin) {
         // Max 2 hours for collaborative learning rooms
         const durationMs = parsedEndTime.getTime() - parsedStartTime.getTime();
         const durationHours = durationMs / (1000 * 60 * 60);
@@ -131,7 +172,6 @@ export async function PUT(
           );
         }
         */
-      }
     }
 
     if (!isAdmin) {
@@ -180,6 +220,21 @@ export async function PUT(
           },
           { status: 409 }
         );
+      }
+    }
+
+    if (!isAdmin) {
+      const dayStart = new Date(parsedStartTime);
+      dayStart.setHours(0, 0, 0, 0);
+      const dayEnd = new Date(parsedStartTime);
+      dayEnd.setHours(23, 59, 59, 999);
+      const bookingsToday = (await storage.getFacilityBookingsByUser(bookingOwnerId)).filter((booking: any) => {
+        if (String(booking.id) === String(bookingId) || !["approved", "pending"].includes(booking.status)) return false;
+        const bookingStart = new Date(booking.startTime);
+        return bookingStart >= dayStart && bookingStart <= dayEnd;
+      });
+      if (bookingsToday.length >= 2) {
+        return NextResponse.json({ message: "You have reached the maximum of 2 bookings per day." }, { status: 400 });
       }
     }
 
@@ -250,14 +305,17 @@ export async function PUT(
       console.warn("[bookings] Failed to normalize equipment", error);
     }
 
-    if (participants !== undefined && participants !== null) {
-      const parsedParticipants = Number(participants);
-      if (!Number.isNaN(parsedParticipants)) {
-        updatePayload.participants = parsedParticipants;
-      }
-    }
+    updatePayload.participants = parsedParticipants;
 
     await storage.updateFacilityBooking(bookingId, updatePayload as any);
+
+    if (
+      !isAdmin
+      && existingBooking.status === "approved"
+      && parsedStartTime.getTime() !== new Date(existingBooking.startTime).getTime()
+    ) {
+      await setArrivalConfirmationDeadline(bookingId, parsedStartTime);
+    }
 
     if (updatePayload.equipment) {
       try {

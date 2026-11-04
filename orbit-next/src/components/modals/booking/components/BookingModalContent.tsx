@@ -22,6 +22,7 @@ import {
   getDefaultEndTime,
   buildEquipmentPayload,
   createEmptyEquipmentState,
+  deriveInitialBookingState,
   getPredefinedFacilities,
   filterFacilitiesByRole,
 } from '../utils';
@@ -37,6 +38,7 @@ interface BookingModalContentProps {
   selectedFacilityId?: number | null;
   initialStartTime?: Date | null;
   initialEndTime?: Date | null;
+  bookingToEdit?: any;
 }
 
 export function BookingModalContent({
@@ -46,6 +48,7 @@ export function BookingModalContent({
   selectedFacilityId,
   initialStartTime = null,
   initialEndTime = null,
+  bookingToEdit = null,
 }: BookingModalContentProps) {
   // Fetch campus list for campus name lookup (must be inside component)
   const { data: campusList = [] } = useQuery({
@@ -73,26 +76,33 @@ export function BookingModalContent({
   const bookingSchema = createBookingSchema();
   type BookingFormData = z.infer<typeof bookingSchema>;
 
-  const defaultStartTime = useMemo(() => getDefaultStartTime(initialStartTime), [initialStartTime]);
-  const defaultEndTime = useMemo(() => getDefaultEndTime(defaultStartTime, initialEndTime), [defaultStartTime, initialEndTime]);
+  const initialBookingState = useMemo(() => deriveInitialBookingState(bookingToEdit), [bookingToEdit]);
+  const defaultStartTime = useMemo(
+    () => initialBookingState.startTime ?? getDefaultStartTime(initialStartTime),
+    [initialBookingState.startTime, initialStartTime]
+  );
+  const defaultEndTime = useMemo(
+    () => initialBookingState.endTime ?? getDefaultEndTime(defaultStartTime, initialEndTime),
+    [initialBookingState.endTime, defaultStartTime, initialEndTime]
+  );
 
   const form = useForm<BookingFormData>({
     resolver: zodResolver(bookingSchema),
     mode: 'onChange',
     defaultValues: {
-      facilityId: selectedFacilityId?.toString() || facilities[0]?.id.toString() || "",
+      facilityId: initialBookingState.facilityId || selectedFacilityId?.toString() || facilities[0]?.id.toString() || "",
       startTime: defaultStartTime,
       endTime: defaultEndTime,
-      purpose: "",
-      participants: 1,
+      purpose: initialBookingState.purpose,
+      participants: initialBookingState.participants,
       reminderOptIn: true,
       reminderLeadMinutes: 60,
     },
   });
 
   // Equipment state
-  const [equipmentState, setEquipmentState] = useState(() => createEmptyEquipmentState());
-  const [equipmentOtherText, setEquipmentOtherText] = useState('');
+  const [equipmentState, setEquipmentState] = useState(() => initialBookingState.equipmentState || createEmptyEquipmentState());
+  const [equipmentOtherText, setEquipmentOtherText] = useState(initialBookingState.equipmentOtherText || '');
 
   // Slot management
   const facilityIdValue = form.watch("facilityId");
@@ -141,6 +151,7 @@ export function BookingModalContent({
     facilities,
     allBookings,
     userEmail: user?.email,
+    existingBookingId: bookingToEdit?.id,
     isAdmin,
   });
 
@@ -169,7 +180,11 @@ export function BookingModalContent({
         reminderLeadMinutes: data.reminderLeadMinutes,
       };
       
-      const response = await apiRequest("POST", "/api/bookings", bookingData);
+      const response = await apiRequest(
+        bookingToEdit ? "PUT" : "POST",
+        bookingToEdit ? `/api/bookings/${bookingToEdit.id}` : "/api/bookings",
+        bookingData
+      );
       return response.json();
     },
     onSuccess: async () => {
@@ -265,6 +280,7 @@ export function BookingModalContent({
               slotManagement={slotManagement}
               selectedFacility={selectedFacility}
               isAdmin={isAdmin}
+              isEditing={!!bookingToEdit}
             />
           </DialogContent>
         </Dialog>
@@ -311,7 +327,7 @@ export function BookingModalContent({
             </div>
           </div>
 
-          <h2 className="text-xl font-bold text-gray-900 mb-1">Booking Scheduled!</h2>
+          <h2 className="text-xl font-bold text-gray-900 mb-1">{bookingToEdit ? 'Booking Updated!' : 'Booking Scheduled!'}</h2>
           {successInfo && (
             <div className="rounded-xl border border-gray-100 bg-gray-50 px-5 py-4 mb-6 text-left space-y-3">
 
