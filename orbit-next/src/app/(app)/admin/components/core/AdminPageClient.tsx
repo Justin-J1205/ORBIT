@@ -64,7 +64,7 @@ function AdminDashboardContent() {
   }, [authLoading, effectiveUser, requiresPasswordSetup, setLocation]);
 
   const queries = useAdminQueries({ isAdmin });
-  const { usersData: usersDataQ, activitiesData, facilitiesData, adminBookingsData, currentUserData, reportSchedulesData } = queries as any;
+  const { usersData: usersDataQ, activitiesData, facilitiesData, campusesData, adminBookingsData, currentUserData, reportSchedulesData } = queries as any;
 
   const authUserId = authUser?.id ?? null;
   useInvalidateOnAdminChange(authUserId, isAdmin, queryClient);
@@ -88,6 +88,7 @@ function AdminDashboardContent() {
     pendingBookingsData: (queries as any).pendingBookingsData,
     facilitiesData,
     facilities: state.facilities || [],
+    campusesData: campusesData || [],
     reportSchedulesData,
     adminBookingsData,
     getFacilityName: state.getFacilityName,

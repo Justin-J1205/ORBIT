@@ -316,13 +316,13 @@ export async function sendBookingNotifications({
     const user = await storage.getUser(userId);
     const facilityInfo = facility ?? (await storage.getFacility(booking.facilityId));
     const userEmail = user?.email || "Unknown User";
-    const notificationMessage = `${userEmail} scheduled a booking for ${facilityInfo?.name || `Facility ${booking.facilityId}`} from ${startTime.toLocaleString()} to ${endTime.toLocaleString()}.`;
+    const notificationMessage = `${userEmail} submitted a booking request for ${facilityInfo?.name || `Facility ${booking.facilityId}`} from ${startTime.toLocaleString()} to ${endTime.toLocaleString()}.`;
 
     await storage.createSystemAlert({
       id: randomUUID(),
       type: "booking",
       severity: "low",
-      title: "Booking Created",
+      title: "Booking Request Submitted",
       message: notificationMessage,
       userId: null,
       isRead: false,
@@ -334,8 +334,8 @@ export async function sendBookingNotifications({
       id: randomUUID(),
       type: "booking",
       severity: "low",
-      title: "Booking Scheduled",
-      message: `Your booking for ${facilityInfo?.name || `Facility ${booking.facilityId}`} on ${startTime.toLocaleString()} has been scheduled.`,
+      title: "Booking Pending Approval",
+      message: `Your booking request for ${facilityInfo?.name || `Facility ${booking.facilityId}`} on ${startTime.toLocaleString()} was submitted and is waiting for administrator approval.`,
       userId,
       isRead: false,
       createdAt: new Date(),

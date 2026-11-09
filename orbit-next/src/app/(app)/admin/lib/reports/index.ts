@@ -24,7 +24,7 @@ export function generateBookingWeeklyReport(
   wsData.push([`Total Bookings: ${bk.length}`]);
   wsData.push([]);
 
-  wsData.push(['Week', 'Date', 'Day', 'Time', 'Facility', 'User Email', 'Status', 'Participants', 'Purpose', 'Booking ID']);
+  wsData.push(['Week', 'Date', 'Day', 'Time', 'Facility', 'Name', 'Program', 'User Email', 'Status', 'Participants', 'Purpose', 'Booking ID']);
 
   const getWeekKey = (isoDateStr: string) => {
     const d = new Date(isoDateStr);
@@ -49,7 +49,7 @@ export function generateBookingWeeklyReport(
   for (const wk of weekKeys) {
     const items = weekMap[wk].sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
 
-    wsData.push([wk, '', '', '', '', '', '', '', '', '']);
+    wsData.push([wk, '', '', '', '', '', '', '', '', '', '', '']);
 
     for (const booking of items) {
       const dateObj = new Date(booking.startTime);
@@ -59,6 +59,8 @@ export function generateBookingWeeklyReport(
       const endTime = new Date(booking.endTime).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
       const timeStr = `${startTime} - ${endTime}`;
       const facilityName = formatFacilityNameForReport(getFacilityName(booking.facilityId));
+      const name = booking.name || 'Not recorded';
+      const program = booking.program || 'Not recorded';
       const userEmail = getUserEmail(booking.userId);
 
       const now = new Date();
@@ -86,7 +88,7 @@ export function generateBookingWeeklyReport(
       const purpose = (booking.purpose || 'N/A').substring(0, 200);
       const bookingId = booking.id || 'N/A';
 
-      wsData.push(['', dateStr, dayName, timeStr, facilityName, userEmail, status, participants, purpose, bookingId]);
+      wsData.push(['', dateStr, dayName, timeStr, facilityName, name, program, userEmail, status, participants, purpose, bookingId]);
     }
   }
 
@@ -98,10 +100,11 @@ export function generateBookingWeeklyReport(
     { wch: 6 },
     { wch: 18 },
     { wch: 28 },
+    { wch: 24 },
+    { wch: 16 },
     { wch: 25 },
     { wch: 12 },
     { wch: 12 },
-    { wch: 20 },
     { wch: 40 },
     { wch: 38 }
   ];

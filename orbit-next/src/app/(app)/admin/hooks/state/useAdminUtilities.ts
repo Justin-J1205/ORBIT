@@ -20,6 +20,12 @@ export function useAdminUtilities() {
     return usersData?.find(u => u.id === id)?.email || String(id);
   }
 
+  function getUserRole(id: any) {
+    if (!id) return 'Unknown';
+    const role = usersData?.find(u => String(u.id) === String(id))?.role;
+    return role ? role.charAt(0).toUpperCase() + role.slice(1) : 'Not recorded';
+  }
+
   function getFacilityName(id: any) {
     if (!id) return 'Unknown Facility';
     return facilities?.find(f => f.id === id)?.name || String(id);
@@ -42,8 +48,8 @@ export function useAdminUtilities() {
     let classes = 'text-sm font-medium px-2 py-1 rounded-full';
 
     if (s === 'pending' || s === 'request' || s === 'requested') {
-      label = 'Scheduled';
-      classes += ' bg-green-100 text-green-800';
+      label = 'Pending approval';
+      classes += ' bg-blue-100 text-blue-800';
     } else if (s === 'approved' || s === 'completed') {
       label = (s === 'approved') ? 'Approved' : 'Completed';
       classes += ' bg-green-100 text-green-800';
@@ -71,6 +77,7 @@ export function useAdminUtilities() {
     setUser,
     usersMap,
     getUserEmail,
+    getUserRole,
     getFacilityName,
     abbreviateFacilityName,
     renderStatusBadge,

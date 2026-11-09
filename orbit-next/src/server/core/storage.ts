@@ -76,7 +76,9 @@ export interface IStorage {
   // Facility booking operations
   createFacilityBooking(booking: InsertFacilityBooking): Promise<FacilityBooking>;
   getFacilityBooking(id: string): Promise<FacilityBooking | undefined>;
+  getFacilityBookingByClientRequestId(clientRequestId: string, userId: string): Promise<FacilityBooking | undefined>;
   updateFacilityBooking(id: string, updates: Partial<FacilityBooking>): Promise<void>;
+  updateFacilityBookingWithActivity(id: string, updates: Partial<FacilityBooking>, activity: ActivityLog, expectedStatus?: string): Promise<void>;
   getAllFacilityBookings(): Promise<FacilityBooking[]>; // New function
   
   
@@ -347,10 +349,10 @@ export class DatabaseStorage implements IStorage {
         // No conflicts - insert booking
         const [created] = await tx.insert(facilityBookings).values(booking as any).returning();
 
-        const shouldScheduleReminder = (booking as any).reminderOptIn !== false;
-        if (shouldScheduleReminder) {
+        const reminderOptIn = booking.reminderOptIn !== false;
+        if (booking.status === "approved" && reminderOptIn) {
           await this.upsertBookingReminder(tx as any, created.id, booking.reminderLeadMinutes ?? 60, booking.startTime);
-        } else {
+        } else if (!reminderOptIn) {
           await tx
             .update(facilityBookings)
             .set({ reminderStatus: "skipped", reminderScheduledAt: null, reminderOptIn: false })
@@ -370,6 +372,16 @@ export class DatabaseStorage implements IStorage {
 
   async getFacilityBooking(id: string): Promise<FacilityBooking | undefined> {
     const [booking] = await db.select().from(facilityBookings).where(eq(facilityBookings.id, id));
+    return booking;
+  }
+
+  async getFacilityBookingByClientRequestId(clientRequestId: string, userId: string): Promise<FacilityBooking | undefined> {
+    const [booking] = await db.select().from(facilityBookings).where(
+      and(
+        eq(facilityBookings.clientRequestId, clientRequestId),
+        eq(facilityBookings.userId, userId),
+      )
+    );
     return booking;
   }
 
@@ -421,6 +433,78 @@ export class DatabaseStorage implements IStorage {
         const startTime = safeUpdates.startTime ?? updated.startTime;
         await this.upsertBookingReminder(tx as any, id, leadMinutes, startTime);
       }
+    });
+  }
+
+  async updateFacilityBookingWithActivity(
+    id: string,
+    updates: Partial<FacilityBooking>,
+    activity: ActivityLog,
+    expectedStatus?: string,
+  ): Promise<void> {
+    await db.transaction(async (tx: DbTransaction) => {
+      const [existing] = await tx.select().from(facilityBookings).where(eq(facilityBookings.id, id));
+      if (!existing) throw new Error("Booking not found.");
+      if (expectedStatus && existing.status !== expectedStatus) {
+        throw new (this.ConflictError)("Booking status changed before the action could be applied.");
+      }
+
+      const lockFacilityIds = Array.from(new Set([existing.facilityId, updates.facilityId ?? existing.facilityId])).sort((a, b) => a - b);
+      for (const facilityId of lockFacilityIds) {
+        await tx.execute(sql`SELECT pg_advisory_xact_lock(${facilityId})`);
+      }
+
+      const startTime = updates.startTime ?? existing.startTime;
+      const endTime = updates.endTime ?? existing.endTime;
+      const shouldCheckConflicts = updates.status === "approved"
+        || updates.startTime !== undefined
+        || updates.endTime !== undefined
+        || updates.facilityId !== undefined;
+      const facilityId = updates.facilityId ?? existing.facilityId;
+
+      if (shouldCheckConflicts) {
+        const conflicts = await tx.select().from(facilityBookings).where(
+          and(
+            eq(facilityBookings.facilityId, facilityId),
+            eq(facilityBookings.status, "approved"),
+            lt(facilityBookings.startTime, endTime),
+            gt(facilityBookings.endTime, startTime),
+            ne(facilityBookings.id, id),
+          )
+        );
+        if (conflicts.length > 0) {
+          throw new (this.ConflictError)("Booking conflicts with an approved reservation.", conflicts as FacilityBooking[]);
+        }
+      }
+
+      await tx.update(facilityBookings).set(updates).where(eq(facilityBookings.id, id));
+      if (updates.status === "denied" || updates.status === "cancelled") {
+        await tx.delete(bookingReminders).where(eq(bookingReminders.bookingId, id));
+        await tx.update(facilityBookings)
+          .set({ reminderStatus: "skipped", reminderScheduledAt: null })
+          .where(eq(facilityBookings.id, id));
+      } else if (
+        updates.status === "approved" ||
+        updates.startTime !== undefined ||
+        updates.reminderOptIn !== undefined ||
+        updates.reminderLeadMinutes !== undefined
+      ) {
+        const reminderOptIn = updates.reminderOptIn ?? existing.reminderOptIn;
+        if (reminderOptIn) {
+          await this.upsertBookingReminder(
+            tx as any,
+            id,
+            updates.reminderLeadMinutes ?? existing.reminderLeadMinutes,
+            startTime,
+          );
+        } else {
+          await tx.delete(bookingReminders).where(eq(bookingReminders.bookingId, id));
+          await tx.update(facilityBookings)
+            .set({ reminderStatus: "skipped", reminderScheduledAt: null, reminderOptIn: false })
+            .where(eq(facilityBookings.id, id));
+        }
+      }
+      await tx.insert(activityLogs).values(activity);
     });
   }
 
@@ -480,7 +564,15 @@ export class DatabaseStorage implements IStorage {
         endTime: facilityBookings.endTime,
         purpose: facilityBookings.purpose,
         participants: facilityBookings.participants,
+        name: facilityBookings.name,
+        program: facilityBookings.program,
         equipment: facilityBookings.equipment,
+        clientRequestId: facilityBookings.clientRequestId,
+        declineReason: facilityBookings.declineReason,
+        cancellationReason: facilityBookings.cancellationReason,
+        rescheduleReason: facilityBookings.rescheduleReason,
+        equipmentRequestStatus: facilityBookings.equipmentRequestStatus,
+        equipmentDeclineReason: facilityBookings.equipmentDeclineReason,
         arrivalConfirmationDeadline: facilityBookings.arrivalConfirmationDeadline,
         arrivalConfirmed: facilityBookings.arrivalConfirmed,
         status: facilityBookings.status,
@@ -762,7 +854,7 @@ export class DatabaseStorage implements IStorage {
 
       // Skip deduplication for booking and equipment notifications 
       // to ensure each booking/equipment request gets its own notification
-      // Note: Bookings are auto-approved, so only "Booking Created" (admin) and "Booking Scheduled" (user) are used
+      // Keep booking lifecycle notifications distinct so approval and decision messages are not deduplicated.
       const skipDedup = alert.title === 'Booking Created' || 
                         alert.title === 'Booking Scheduled' || 
                         alert.title === 'Equipment Needs Submitted' ||

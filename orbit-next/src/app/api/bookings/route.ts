@@ -9,7 +9,6 @@ import {
   ensureFacilityIsBookable,
   enforceUserBookingConflicts,
   sendBookingNotifications,
-  setArrivalConfirmationDeadline,
   refreshBooking,
 } from "@/server/bookings/helpers";
 import { createFacilityBookingSchema } from "@shared/schema";
@@ -60,6 +59,16 @@ export async function POST(request: NextRequest) {
       userId: authResult.user.id,
       status: "pending",
     });
+
+    if (parsed.clientRequestId) {
+      const existingRequest = await storage.getFacilityBookingByClientRequestId(
+        parsed.clientRequestId,
+        authResult.user.id,
+      );
+      if (existingRequest) {
+        return NextResponse.json(existingRequest, { status: 200 });
+      }
+    }
 
     const isAdminUser = authResult.userRecord?.role === 'admin';
 
@@ -168,9 +177,23 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    const equipment = parsed.equipment as { items?: unknown[]; others?: string | null } | undefined;
+    const hasEquipmentRequest = Boolean(equipment?.items?.length || equipment?.others?.trim());
+    const bookingInput = {
+      ...parsed,
+      equipmentRequestStatus: hasEquipmentRequest ? "pending" as const : null,
+    };
+
     let booking = await storage
-      .createFacilityBooking(parsed)
+      .createFacilityBooking(bookingInput)
       .catch(async (error: any) => {
+        if (error?.code === "23505" && parsed.clientRequestId) {
+          const existingRequest = await storage.getFacilityBookingByClientRequestId(
+            parsed.clientRequestId,
+            authResult.user.id,
+          );
+          if (existingRequest) return existingRequest;
+        }
         if (error?.name === "ConflictError") {
           try {
             const facilityInfo = await storage.getFacility(parsed.facilityId);
@@ -217,8 +240,6 @@ export async function POST(request: NextRequest) {
       startTime: parsed.startTime,
       endTime: parsed.endTime,
     });
-
-    await setArrivalConfirmationDeadline(booking.id, parsed.startTime);
 
     const refreshed = await refreshBooking(booking.id);
     return NextResponse.json(refreshed ?? booking, { status: 201 });

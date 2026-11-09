@@ -7,33 +7,25 @@ export function useBookingMutations() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
-  const approveBookingMutation = useMutation({
-    mutationFn: async (_: any) => {
-      return Promise.resolve({});
+  const adminBookingActionMutation = useMutation({
+    mutationFn: async ({ bookingId, ...action }: { bookingId: string; action: string; reason?: string; startTime?: string; endTime?: string; facilityId?: number; participants?: number; purpose?: string; name?: string; program?: string }) => {
+      const res = await apiRequest("POST", `/api/admin/bookings/${bookingId}/actions`, action);
+      return res.json();
     },
     onSuccess: async () => {
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ['/api/admin/bookings'] }),
-        queryClient.invalidateQueries({ queryKey: ['/api/bookings/pending'] }),
-        queryClient.invalidateQueries({ queryKey: ['/api/notifications'] }),
-        queryClient.invalidateQueries({ queryKey: ['/api/admin/alerts'] }),
-        queryClient.invalidateQueries({ queryKey: ['/api/admin/stats'] }),
-        queryClient.invalidateQueries({ queryKey: ['/api/admin/activity'] }),
+        queryClient.invalidateQueries({ queryKey: ["/api/admin/bookings"] }),
+        queryClient.invalidateQueries({ queryKey: ["/api/bookings/pending"] }),
+        queryClient.invalidateQueries({ queryKey: ["/api/bookings"] }),
+        queryClient.invalidateQueries({ queryKey: ["/api/notifications"] }),
+        queryClient.invalidateQueries({ queryKey: ["/api/admin/alerts"] }),
+        queryClient.invalidateQueries({ queryKey: ["/api/admin/stats"] }),
+        queryClient.invalidateQueries({ queryKey: ["/api/admin/activity"] }),
       ]);
+      toast({ title: "Booking updated", description: "The booking action was recorded and the requester was notified." });
     },
-  });
-
-  const denyBookingMutation = useMutation({
-    mutationFn: async (_: any) => Promise.resolve({}),
-    onSuccess: async () => {
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ['/api/admin/bookings'] }),
-        queryClient.invalidateQueries({ queryKey: ['/api/bookings/pending'] }),
-        queryClient.invalidateQueries({ queryKey: ['/api/notifications'] }),
-        queryClient.invalidateQueries({ queryKey: ['/api/admin/alerts'] }),
-        queryClient.invalidateQueries({ queryKey: ['/api/admin/stats'] }),
-        queryClient.invalidateQueries({ queryKey: ['/api/admin/activity'] }),
-      ]);
+    onError: (error: Error) => {
+      toast({ title: "Action failed", description: error.message, variant: "destructive" });
     },
   });
 
@@ -55,16 +47,10 @@ export function useBookingMutations() {
     mutationFn: async (booking: FacilityBooking) => {
       const now = new Date();
       const endTime = new Date(now.getTime() + 2 * 60 * 60 * 1000);
-      const arrivalDeadline = new Date(now.getTime() + 15 * 60 * 1000);
-      const res = await apiRequest('PUT', `/api/bookings/${booking.id}`, {
-        purpose: booking.purpose,
+      const res = await apiRequest("POST", `/api/admin/bookings/${booking.id}/actions`, {
+        action: "force_active",
         startTime: now.toISOString(),
         endTime: endTime.toISOString(),
-        facilityId: booking.facilityId,
-        participants: booking.participants,
-        status: 'approved',
-        arrivalConfirmationDeadline: arrivalDeadline.toISOString(),
-        arrivalConfirmed: false,
       });
       return res.json?.();
     },
@@ -127,11 +113,8 @@ export function useBookingMutations() {
   };
 
   return {
-    approveBookingMutation,
-    denyBookingMutation,
+    adminBookingActionMutation,
     confirmArrivalMutation,
     forceActiveBookingMutation,
-    handleApproveNoop,
-    handleDenyNoop,
   };
 }

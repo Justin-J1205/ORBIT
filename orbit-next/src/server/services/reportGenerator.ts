@@ -80,9 +80,11 @@ async function generateBookingSummarySection(): Promise<PDFReportSection[]> {
     title: "Recent Bookings",
     subtitle: "Most recent 50 bookings",
     rows: [
-      ["Facility", "User", "Start Time", "End Time", "Status"],
+      ["Facility", "Name", "Program", "User", "Start Time", "End Time", "Status"],
       ...recentBookings.map((b: any) => [
         facilityMap.get(b.facilityId) || "Unknown",
+        b.name || "Not recorded",
+        b.program || "Not recorded",
         userMap.get(b.userId) || "Unknown",
         new Date(b.startTime).toLocaleString(),
         new Date(b.endTime).toLocaleString(),

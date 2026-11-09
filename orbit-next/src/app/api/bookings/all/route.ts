@@ -33,6 +33,16 @@ export async function GET(request: Request) {
         return String(booking.userId) === String(authResult.user.id);
       }
       return false;
+    }).map((booking) => {
+      const safeBooking = { ...booking };
+      Reflect.deleteProperty(safeBooking, "name");
+      Reflect.deleteProperty(safeBooking, "program");
+      Reflect.deleteProperty(safeBooking, "clientRequestId");
+      Reflect.deleteProperty(safeBooking, "declineReason");
+      Reflect.deleteProperty(safeBooking, "cancellationReason");
+      Reflect.deleteProperty(safeBooking, "rescheduleReason");
+      Reflect.deleteProperty(safeBooking, "equipmentDeclineReason");
+      return safeBooking;
     });
 
     return NextResponse.json(filtered, { status: 200 });

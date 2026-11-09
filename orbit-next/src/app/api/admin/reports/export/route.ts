@@ -91,10 +91,12 @@ export async function POST(req: Request) {
       title: "Upcoming Bookings",
       subtitle: upcoming.length ? "Next 25 scheduled reservations" : "No upcoming bookings found.",
       rows: [
-        ["When", "Facility", "User", "Status", "Participants"],
+        ["When", "Facility", "Name", "Program", "User", "Status", "Participants"],
         ...upcoming.map((booking) => [
           formatDateTime(booking.startTime),
           facilityNameById.get(booking.facilityId) ?? String(booking.facilityId),
+          booking.name || "Not recorded",
+          booking.program || "Not recorded",
           userEmailById.get(String(booking.userId)) ?? String(booking.userId),
           booking.status || "—",
           String(booking.participants ?? 0),
@@ -105,10 +107,12 @@ export async function POST(req: Request) {
       title: "Recent Activity",
       subtitle: recent.length ? "Most recent 25 concluded or in-progress bookings" : "No recent bookings found.",
       rows: [
-        ["When", "Facility", "User", "Status", "Purpose"],
+        ["When", "Facility", "Name", "Program", "User", "Status", "Purpose"],
         ...recent.map((booking) => [
           formatDateTime(booking.startTime),
           facilityNameById.get(booking.facilityId) ?? String(booking.facilityId),
+          booking.name || "Not recorded",
+          booking.program || "Not recorded",
           userEmailById.get(String(booking.userId)) ?? String(booking.userId),
           booking.status || "—",
           (booking.purpose || "—").slice(0, 80),

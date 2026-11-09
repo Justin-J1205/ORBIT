@@ -18,6 +18,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { CustomTextarea } from '@/components/ui/custom-textarea';
 import { NumberInputWithControls } from './NumberInputWithControls';
 import { BookingSummary } from './BookingSummary';
+import { ACADEMIC_PROGRAM_OPTIONS } from '@shared/bookingRules';
 import { EQUIPMENT_OPTIONS, FORM_LIMITS, type EquipmentStateValue } from '../schemas/bookingSchema';
 import { getFacilityMaxCapacity } from '../utils';
 import type { ValidationError } from '../utils/validationUtils';
@@ -190,6 +191,18 @@ export function BookingForm({
   const [selectedCampus, setSelectedCampus] = useState<string>(
     () => selectedFacility?.campusId ? String(selectedFacility.campusId) : ''
   );
+  const [isOffline, setIsOffline] = useState(false);
+
+  useEffect(() => {
+    const updateConnectivity = () => setIsOffline(!navigator.onLine);
+    updateConnectivity();
+    window.addEventListener("online", updateConnectivity);
+    window.addEventListener("offline", updateConnectivity);
+    return () => {
+      window.removeEventListener("online", updateConnectivity);
+      window.removeEventListener("offline", updateConnectivity);
+    };
+  }, []);
 
   const { data: campusList = [] } = useQuery<Array<{ id: number; name: string }>>({
     queryKey: ["/api/campuses"],
@@ -202,21 +215,28 @@ export function BookingForm({
 
   // Update campus when facility selection changes after mount
   useEffect(() => {
-    if (selectedFacility?.campusId) {
-      setSelectedCampus(String(selectedFacility.campusId));
-    }
+    const timeout = window.setTimeout(() => {
+      setSelectedCampus(selectedFacility?.campusId ? String(selectedFacility.campusId) : "");
+    }, 0);
+    return () => window.clearTimeout(timeout);
   }, [selectedFacility?.campusId]);
 
   const startTime: Date | undefined = form.watch('startTime');
   const endTime: Date | undefined = form.watch('endTime');
   const facilityIdWatched: string | undefined = form.watch('facilityId');
+  const [currentTime, setCurrentTime] = useState<number | null>(null);
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => setCurrentTime(Date.now()), 0);
+    return () => window.clearTimeout(timeout);
+  }, [startTime]);
 
   // Filter facilities by selected campus
   const filteredFacilities = useMemo(() => {
-    if (!selectedCampus) return [];
+    if (!selectedCampus) return isOffline ? facilities : [];
     const campusId = parseInt(selectedCampus, 10);
     return facilities.filter((f: any) => f.campusId === campusId);
-  }, [facilities, selectedCampus]);
+  }, [facilities, selectedCampus, isOffline]);
 
   // Reset facility selection when campus changes
   useEffect(() => {
@@ -295,40 +315,40 @@ const { data: equipmentAvailability } = useQuery<Array<{ key: string; label: str
     const fd = (conflictAvailData as any).data?.find((item: any) => item.facility?.id === parseInt(facilityIdWatched));
     if (!fd) return false;
     return mergeBookedSlots(fd.slots ?? []).some(b => startTime < b.end && endTime > b.start);
-  }, [conflictAvailData, startTime?.getTime(), endTime?.getTime(), facilityIdWatched]);
+  }, [conflictAvailData, startTime, endTime, facilityIdWatched]);
 
 
   // Admin and user validation
   const hasEndAfterHours = useMemo(() => {
     if (!endTime) return false;
     return endTime.getHours() > 19 || (endTime.getHours() === 19 && endTime.getMinutes() > 0);
-  }, [endTime?.getTime()]);
+  }, [endTime]);
 
   const hasEndExceedsMax = useMemo(() => {
     if (!startTime || !endTime) return false;
     return endTime.getTime() > startTime.getTime() + MAX_BOOKING_MS;
-  }, [startTime?.getTime(), endTime?.getTime()]);
+  }, [startTime, endTime]);
 
   const hasBookingTooShort = useMemo(() => {
     if (!startTime || !endTime) return false;
     const durationMs = endTime.getTime() - startTime.getTime();
     return durationMs > 0 && durationMs < 30 * 60 * 1000;
-  }, [startTime?.getTime(), endTime?.getTime()]);
+  }, [startTime, endTime]);
 
   const hasStartInPast = useMemo(() => {
-    if (!startTime) return false;
-    return startTime.getTime() < Date.now();
-  }, [startTime?.getTime()]);
+    if (!startTime || currentTime === null) return false;
+    return startTime.getTime() < currentTime;
+  }, [startTime, currentTime]);
 
   const hasStartBeforeHours = useMemo(() => {
     if (!startTime) return false;
     return startTime.getHours() < 7 || (startTime.getHours() === 7 && startTime.getMinutes() < 30);
-  }, [startTime?.getTime()]);
+  }, [startTime]);
 
   const hasInvalidTimeOrder = useMemo(() => {
     if (!startTime || !endTime) return false;
     return endTime.getTime() <= startTime.getTime();
-  }, [startTime?.getTime(), endTime?.getTime()]);
+  }, [startTime, endTime]);
 
   // Granular red flags per input box
   const startDateHasError = !isAdmin && hasStartInPast;
@@ -408,10 +428,10 @@ const { data: equipmentAvailability } = useQuery<Array<{ key: string; label: str
             render={({ field }) => (
               <FormItem>
                 <Label>Facility <span className="text-red-500">*</span></Label>
-                <Select onValueChange={field.onChange} value={field.value} disabled={!selectedCampus}>
+                <Select onValueChange={field.onChange} value={field.value} disabled={!selectedCampus && !isOffline}>
                   <FormControl>
                     <SelectTrigger>
-                      <SelectValue placeholder={selectedCampus ? "Select a facility" : "Select Campus First"} />
+                      <SelectValue placeholder={selectedCampus ? "Select a facility" : isOffline ? "Select a facility" : "Select Campus First"} />
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
@@ -437,7 +457,7 @@ const { data: equipmentAvailability } = useQuery<Array<{ key: string; label: str
                   onChange={field.onChange}
                   min={1}
                   max={maxCapacity}
-                  disabled={!selectedCampus}
+                  disabled={!selectedCampus && !isOffline}
                 />
                 {selectedCampus && selectedFacility && (
                   <p className="text-xs text-gray-500 mt-1">Max capacity: <strong>{maxCapacity}</strong> {maxCapacity === 1 ? 'person' : 'people'}</p>
@@ -567,6 +587,56 @@ const { data: equipmentAvailability } = useQuery<Array<{ key: string; label: str
           </ul>
         )}
 
+        <div className="grid md:grid-cols-2 gap-4">
+          <FormField
+            control={form.control}
+            name="name"
+            render={({ field }) => (
+              <FormItem>
+                <Label>
+                  Booking Name <span className="text-red-500">*</span>
+                </Label>
+                <FormControl>
+                  <Input
+                    {...field}
+                    value={field.value ?? ''}
+                    maxLength={200}
+                    autoComplete="name"
+                    placeholder="Name of the person booking"
+                    required
+                  />
+                </FormControl>
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="program"
+            render={({ field }) => (
+              <FormItem>
+                <Label>
+                  Academic Program <span className="text-red-500">*</span>
+                </Label>
+                <FormControl>
+                  <Select onValueChange={field.onChange} value={field.value}>
+                    <SelectTrigger aria-required="true">
+                      <SelectValue placeholder="Select your academic program" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {ACADEMIC_PROGRAM_OPTIONS.map((program) => (
+                        <SelectItem key={program} value={program}>
+                          {program}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </FormControl>
+              </FormItem>
+            )}
+          />
+        </div>
+
         {/* Purpose */}
         <FormField
           control={form.control}
@@ -639,10 +709,10 @@ const { data: equipmentAvailability } = useQuery<Array<{ key: string; label: str
 
         {/* Booking Summary */}
         <BookingSummary
-          facility={selectedCampus && selectedFacility ? selectedFacility : undefined}
+          facility={(selectedCampus || isOffline) && selectedFacility ? selectedFacility : undefined}
           startTime={form.watch("startTime")}
           endTime={form.watch("endTime")}
-          participants={selectedCampus && selectedFacility ? form.watch("participants") : undefined}
+          participants={(selectedCampus || isOffline) && selectedFacility ? form.watch("participants") : undefined}
           purpose={form.watch("purpose")}
           equipment={equipmentState}
           equipmentOtherText={equipmentOtherText}
@@ -663,7 +733,7 @@ const { data: equipmentAvailability } = useQuery<Array<{ key: string; label: str
           </Button>
           <Button
             type="submit"
-            disabled={isSubmitting || isPurposeEmpty || hasDailyLimitError || !selectedCampus}
+            disabled={isSubmitting || isPurposeEmpty || hasDailyLimitError || (!selectedCampus && !isOffline)}
             className={hasDailyLimitError ? 'opacity-60 cursor-not-allowed' : ''}
           >
             {isSubmitting
@@ -672,9 +742,14 @@ const { data: equipmentAvailability } = useQuery<Array<{ key: string; label: str
               ? 'Daily Limit Reached'
               : hasAnyTimeError && !isAdmin
               ? 'Fix Time Errors'
-              : isEditing ? 'Save Changes' : 'Create Booking'}
+              : isOffline && !isEditing ? 'Save Offline' : isEditing ? 'Save Changes' : 'Create Booking'}
           </Button>
         </DialogFooter>
+        {isOffline && !isEditing && (
+          <p role="status" className="text-xs text-amber-700">
+            You are offline. New booking requests will be saved on this device and synced when you reconnect.
+          </p>
+        )}
       </form>
     </Form>
   );

@@ -6,6 +6,7 @@
 
 import { z } from 'zod';
 import {
+  ACADEMIC_PROGRAM_OPTIONS,
   BOOKING_MAX_DURATION_MS,
   BOOKING_MIN_DURATION_MS,
   BOOKING_MAX_DURATION_MINUTES,
@@ -61,6 +62,10 @@ export function createBookingSchema() {
       }),
       purpose: z.string().min(1, "Purpose is required"),
       participants: z.number().min(1, "Number of participants is required"),
+      name: z.string().trim().min(1, "Name is required").max(200),
+      program: z.enum(ACADEMIC_PROGRAM_OPTIONS, {
+        errorMap: () => ({ message: "Please select a valid academic program" }),
+      }),
       reminderOptIn: z.boolean().optional(),
       reminderLeadMinutes: z.number().optional(),
     })

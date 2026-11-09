@@ -39,6 +39,7 @@ import {
 } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 import { z } from "zod";
+import { ACADEMIC_PROGRAM_OPTIONS } from "./bookingRules";
 
 // Session storage table for Replit Auth
 export const sessions = pgTable(
@@ -125,7 +126,15 @@ export const facilityBookings = pgTable("facility_bookings", {
   endTime: timestamp("end_time").notNull(),
   purpose: text("purpose").notNull(),
   participants: integer("participants").notNull(),
+  name: varchar("name", { length: 200 }),
+  program: varchar("program", { length: 100 }),
   equipment: jsonb("equipment"),
+  clientRequestId: uuid("client_request_id").unique(),
+  declineReason: text("decline_reason"),
+  cancellationReason: text("cancellation_reason"),
+  rescheduleReason: text("reschedule_reason"),
+  equipmentRequestStatus: varchar("equipment_request_status"),
+  equipmentDeclineReason: text("equipment_decline_reason"),
   arrivalConfirmationDeadline: timestamp("arrival_confirmation_deadline"),
   arrivalConfirmed: boolean("arrival_confirmed").default(false),
   status: varchar("status").default("pending").notNull(),
@@ -274,10 +283,20 @@ export const insertFacilityBookingSchema = z.object({
   endTime: z.date(),
   purpose: z.string(),
   participants: z.number().positive(),
+  name: z.string().trim().min(1, "Name is required").max(200),
+  program: z.enum(ACADEMIC_PROGRAM_OPTIONS, {
+    errorMap: () => ({ message: "Please select a valid academic program" }),
+  }),
   equipment: z.any().optional(),
+  clientRequestId: z.string().uuid().optional(),
   status: z.enum(["pending", "approved", "denied", "cancelled"]).default("pending"),
   adminId: z.string().optional(),
   adminResponse: z.string().optional(),
+  declineReason: z.string().max(1000).nullable().optional(),
+  cancellationReason: z.string().max(1000).nullable().optional(),
+  rescheduleReason: z.string().max(1000).nullable().optional(),
+  equipmentRequestStatus: z.enum(["pending", "approved", "denied"]).nullable().optional(),
+  equipmentDeclineReason: z.string().max(1000).nullable().optional(),
 });
 
 export const createFacilityBookingSchema = insertFacilityBookingSchema;

@@ -8,12 +8,14 @@ import { useUserMutations } from "../mutations/useUserMutations";
 import { useFacilityMutations } from "../mutations/useFacilityMutations";
 import { useScheduleMutations } from "../mutations/useScheduleMutations";
 import { useReportSchedules } from "./useReportSchedules";
+import { useState } from "react";
 
 export function useAdminDataManagement(props: {
   allBookings: any[];
   pendingBookingsData: any[];
   facilitiesData: any[];
   facilities: any[];
+  campusesData: any[];
   reportSchedulesData: any[];
   adminBookingsData: any[];
   getFacilityName: (id: any) => string;
@@ -25,6 +27,7 @@ export function useAdminDataManagement(props: {
     pendingBookingsData,
     facilitiesData,
     facilities,
+    campusesData,
     reportSchedulesData,
     adminBookingsData,
     getFacilityName,
@@ -35,6 +38,7 @@ export function useAdminDataManagement(props: {
   const equipmentManagement = useEquipmentManagement(allBookings, getFacilityName, formatDateTime);
   const facilityFilters = useFacilityFilters(facilitiesData, getFacilityName);
   const reportSchedules = useReportSchedules(reportSchedulesData);
+  const [selectedAnalyticsCampusId, setSelectedAnalyticsCampusId] = useState("all");
 
   const bookingLists = useBookingLists(
     allBookings,
@@ -46,7 +50,9 @@ export function useAdminDataManagement(props: {
   const analytics = useAnalyticsData(
     allBookings,
     facilities || [],
-    getFacilityName
+    getFacilityName,
+    campusesData,
+    selectedAnalyticsCampusId,
   );
 
   useEquipmentHydration(
@@ -67,6 +73,8 @@ export function useAdminDataManagement(props: {
     ...reportSchedules,
     ...bookingLists,
     ...analytics,
+    selectedAnalyticsCampusId,
+    setSelectedAnalyticsCampusId,
     ...bookingMutations,
     ...userMutations,
     ...facilityMutations,

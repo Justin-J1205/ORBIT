@@ -39,6 +39,7 @@ export type BookingManagementSectionProps = {
   openPurpose: Record<string, boolean>;
   setOpenPurpose: Dispatch<SetStateAction<Record<string, boolean>>>;
   getUserEmail: (id: FacilityBooking["userId"]) => string;
+  getUserRole: (id: FacilityBooking["userId"]) => string;
   getFacilityName: (id: FacilityBooking["facilityId"]) => string;
   formatDateTime: (value: FacilityBooking["startTime"]) => string;
   formatDate: (value: FacilityBooking["startTime"]) => string;
@@ -49,6 +50,14 @@ export type BookingManagementSectionProps = {
   confirmArrivalMutation: MutationRef<{ bookingId: FacilityBooking["id"] }>;
   openEquipmentModal: (booking: FacilityBooking) => void;
   forceActiveBookingMutation: MutationRef<FacilityBooking>;
+  adminBookingActionMutation: {
+    mutateAsync: (input: { bookingId: string; action: string; reason?: string; startTime?: string; endTime?: string; facilityId?: number; participants?: number; purpose?: string; name?: string; program?: string }) => Promise<unknown>;
+    isPending: boolean;
+  };
+  equipmentRequestDecisionMutation: {
+    mutateAsync: (input: { bookingId: string; status: "approved" | "denied"; reason?: string }) => Promise<unknown>;
+    isPending: boolean;
+  };
 };
 
 export function BookingManagementSection({
@@ -74,6 +83,7 @@ export function BookingManagementSection({
   openPurpose,
   setOpenPurpose,
   getUserEmail,
+  getUserRole,
   getFacilityName,
   formatDateTime,
   formatDate,
@@ -84,6 +94,8 @@ export function BookingManagementSection({
   confirmArrivalMutation,
   openEquipmentModal,
   forceActiveBookingMutation,
+  adminBookingActionMutation,
+  equipmentRequestDecisionMutation,
 }: BookingManagementSectionProps) {
   const bookingSearchTerm = globalFacilityBookingSearch.trim().toLowerCase();
 
@@ -93,6 +105,8 @@ export function BookingManagementSection({
       const haystack = [
         getUserEmail(booking.userId),
         getFacilityName(booking.facilityId),
+        booking.name,
+        booking.program,
         booking.purpose,
         booking.status,
         String(booking.participants ?? ""),
@@ -110,6 +124,8 @@ export function BookingManagementSection({
       const haystack = [
         getUserEmail(booking.userId),
         getFacilityName(booking.facilityId),
+        booking.name,
+        booking.program,
         booking.purpose,
         booking.status,
         String(booking.participants ?? ""),
@@ -499,12 +515,14 @@ export function BookingManagementSection({
               setActiveBookingsPage={setActiveBookingsPage}
               itemsPerPage={itemsPerPage}
               getUserEmail={getUserEmail}
+              getUserRole={getUserRole}
               getFacilityName={getFacilityName}
               formatTime={formatTime}
               formatDate={formatDate}
               renderPurposeButton={renderPurposeButton}
               renderEquipmentLine={renderEquipmentLine}
               isAdmin={isAdmin}
+              equipmentRequestDecisionMutation={equipmentRequestDecisionMutation}
               openEquipmentModal={openEquipmentModal}
               getNeedsStatusForBooking={getNeedsStatusForBooking}
               hasEquipmentBeenChecked={hasEquipmentBeenChecked}
@@ -526,6 +544,7 @@ export function BookingManagementSection({
               setUpcomingBookingsPage={setUpcomingBookingsPage}
               itemsPerPage={itemsPerPage}
               getUserEmail={getUserEmail}
+              getUserRole={getUserRole}
               getFacilityName={getFacilityName}
               formatDateTime={formatDateTime}
               formatTime={formatTime}
@@ -534,10 +553,9 @@ export function BookingManagementSection({
               renderEquipmentLine={renderEquipmentLine}
               renderNeedsBadge={renderNeedsBadge}
               isAdmin={isAdmin}
-              openEquipmentModal={openEquipmentModal}
-              getNeedsStatusForBooking={getNeedsStatusForBooking}
-              hasEquipmentBeenChecked={hasEquipmentBeenChecked}
               forceActiveBookingMutation={forceActiveBookingMutation}
+              adminBookingActionMutation={adminBookingActionMutation}
+              equipmentRequestDecisionMutation={equipmentRequestDecisionMutation}
               renderPagination={renderPagination}
             />
           </TabsContent>

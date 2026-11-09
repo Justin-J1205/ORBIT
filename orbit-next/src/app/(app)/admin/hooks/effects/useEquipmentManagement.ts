@@ -54,6 +54,25 @@ export function useEquipmentManagement(
     }
   });
 
+  const equipmentRequestDecisionMutation = useMutation({
+    mutationFn: async ({ bookingId, status, reason }: { bookingId: string; status: "approved" | "denied"; reason?: string }) => {
+      const res = await apiRequest("POST", `/api/admin/bookings/${bookingId}/equipment-decision`, { status, reason });
+      return res.json();
+    },
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["/api/admin/bookings"] }),
+        queryClient.invalidateQueries({ queryKey: ["/api/bookings"] }),
+        queryClient.invalidateQueries({ queryKey: ["/api/notifications"] }),
+        queryClient.invalidateQueries({ queryKey: ["/api/admin/activity"] }),
+      ]);
+      toast({ title: "Equipment request updated", description: "The requester has been notified." });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Equipment decision failed", description: error.message, variant: "destructive" });
+    },
+  });
+
   const markBookingNeeds = useCallback(async (bookingId: string, status: 'prepared' | 'not_available', note?: string) => {
     try {
       setUpdatingNeedsIds(prev => new Set(prev).add(bookingId));
@@ -184,5 +203,6 @@ export function useEquipmentManagement(
     confirmEquipmentModal,
     getNeedsStatusForBooking,
     updateNeedsMutation,
+    equipmentRequestDecisionMutation,
   };
 }

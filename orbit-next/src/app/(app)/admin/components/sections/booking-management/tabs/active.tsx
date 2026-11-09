@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
+import { Textarea } from '@/components/ui/textarea';
 
 export const BOOKING_MANAGEMENT_TAB_ACTIVE = 'active' as const;
 
@@ -16,6 +17,7 @@ export type ActiveBookingsTabProps = {
   setActiveBookingsPage: React.Dispatch<React.SetStateAction<number>>;
   itemsPerPage: number;
   getUserEmail: (id: FacilityBooking['userId']) => string;
+  getUserRole: (id: FacilityBooking['userId']) => string;
   getFacilityName: (id: FacilityBooking['facilityId']) => string;
   formatTime: (value: FacilityBooking['startTime']) => string;
   formatDate: (value: FacilityBooking['startTime']) => string;
@@ -30,6 +32,10 @@ export type ActiveBookingsTabProps = {
   onBookingEndExpire: (booking: FacilityBooking) => void;
   CountdownComponent: React.ComponentType<{ expiry: string | Date | undefined; onExpire?: () => void }>;
   renderPagination: (totalItems: number, page: number, setPage: React.Dispatch<React.SetStateAction<number>>) => React.ReactNode;
+  equipmentRequestDecisionMutation: {
+    mutateAsync: (input: { bookingId: string; status: "approved" | "denied"; reason?: string }) => Promise<unknown>;
+    isPending: boolean;
+  };
 };
 
 export function ActiveBookingsTab(props: ActiveBookingsTabProps) {
@@ -41,6 +47,7 @@ export function ActiveBookingsTab(props: ActiveBookingsTabProps) {
     setActiveBookingsPage,
     itemsPerPage,
     getUserEmail,
+    getUserRole,
     getFacilityName,
     formatTime,
     formatDate,
@@ -55,13 +62,18 @@ export function ActiveBookingsTab(props: ActiveBookingsTabProps) {
     onBookingEndExpire,
     CountdownComponent,
     renderPagination,
+    equipmentRequestDecisionMutation,
   } = props;
 
   const [selectedBooking, setSelectedBooking] = useState<FacilityBooking | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [equipmentDecisionReason, setEquipmentDecisionReason] = useState("");
+  const [equipmentDecisionError, setEquipmentDecisionError] = useState("");
 
   const handleBookingClick = (booking: FacilityBooking) => {
     setSelectedBooking(booking);
+    setEquipmentDecisionReason("");
+    setEquipmentDecisionError("");
     setIsModalOpen(true);
   };
 
@@ -95,6 +107,8 @@ export function ActiveBookingsTab(props: ActiveBookingsTabProps) {
                     <div className="flex-1 min-w-0">
                       <h4 className="font-medium text-sm text-gray-900 break-words">{getUserEmail(booking.userId)}</h4>
                       <p className="text-xs text-gray-600 mt-0.5 break-words">{getFacilityName(booking.facilityId)}</p>
+                      <p className="text-xs text-gray-600 mt-0.5">Role: {getUserRole(booking.userId)}</p>
+                      <p className="text-xs text-gray-600 mt-0.5 break-words">Name: {booking.name || "Not recorded"} · Program: {booking.program || "Not recorded"}</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-2 pl-11">
@@ -201,6 +215,7 @@ export function ActiveBookingsTab(props: ActiveBookingsTabProps) {
                       <div>
                         <h4 className="font-semibold text-gray-900 text-base leading-tight">{getUserEmail(booking.userId)}</h4>
                         <p className="text-sm text-gray-600 mt-0.5 leading-tight">{getFacilityName(booking.facilityId)}</p>
+                        <p className="text-xs text-gray-600 mt-0.5">Name: {booking.name || "Not recorded"} · Program: {booking.program || "Not recorded"}</p>
                         <div className="flex items-center gap-2 mt-1.5">
                           <span className="text-xs text-gray-500">Participants:</span>
                           <span className="px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800">{booking.participants || 0}</span>
@@ -303,10 +318,21 @@ export function ActiveBookingsTab(props: ActiveBookingsTabProps) {
                 <div>
                   <h4 className="text-sm font-medium text-gray-500 mb-1">User</h4>
                   <p className="text-sm font-semibold text-gray-900">{getUserEmail(selectedBooking.userId)}</p>
+                  <p className="text-xs text-gray-600 mt-1">Role: {getUserRole(selectedBooking.userId)}</p>
                 </div>
                 <div>
                   <h4 className="text-sm font-medium text-gray-500 mb-1">Status</h4>
                   <Badge className="bg-green-100 text-green-800">Active</Badge>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <h4 className="text-sm font-medium text-gray-500 mb-1">Name</h4>
+                  <p className="text-sm text-gray-900">{selectedBooking.name || "Not recorded"}</p>
+                </div>
+                <div>
+                  <h4 className="text-sm font-medium text-gray-500 mb-1">Program</h4>
+                  <p className="text-sm text-gray-900">{selectedBooking.program || "Not recorded"}</p>
                 </div>
               </div>
               <Separator />
@@ -400,6 +426,63 @@ export function ActiveBookingsTab(props: ActiveBookingsTabProps) {
                 }
                 return null;
               })()}
+              {Boolean(isAdmin && selectedBooking.equipment) && (
+                <>
+                  <Separator />
+                  <div className="space-y-2 rounded-md border border-gray-200 p-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <h3 className="text-sm font-semibold text-gray-900">Equipment borrowing request</h3>
+                      <Badge variant="outline">{selectedBooking.equipmentRequestStatus || "Pending review"}</Badge>
+                    </div>
+                    <p className="text-xs text-gray-600">
+                      Requester: {selectedBooking.name || "Not recorded"} · {getUserRole(selectedBooking.userId)} · Program/department: {selectedBooking.program || "Not recorded"}
+                    </p>
+                    <p className="text-xs text-gray-600">
+                      Requested for: {formatDate(selectedBooking.startTime)} · {formatTime(selectedBooking.startTime)}-{formatTime(selectedBooking.endTime)}
+                    </p>
+                    {selectedBooking.equipmentRequestStatus === "pending" && (
+                      <>
+                        <Textarea
+                          value={equipmentDecisionReason}
+                          maxLength={1000}
+                          onChange={(event) => setEquipmentDecisionReason(event.target.value)}
+                          placeholder="A reason is required to decline this equipment request."
+                        />
+                        {equipmentDecisionError && <p role="alert" className="text-sm text-red-600">{equipmentDecisionError}</p>}
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            type="button"
+                            size="sm"
+                            disabled={equipmentRequestDecisionMutation.isPending}
+                            onClick={() => void equipmentRequestDecisionMutation.mutateAsync({
+                              bookingId: selectedBooking.id,
+                              status: "approved",
+                            }).catch((error) => setEquipmentDecisionError(error instanceof Error ? error.message : "The decision failed."))}
+                          >
+                            Approve equipment
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="destructive"
+                            disabled={equipmentRequestDecisionMutation.isPending || equipmentDecisionReason.trim().length < 5}
+                            onClick={() => void equipmentRequestDecisionMutation.mutateAsync({
+                              bookingId: selectedBooking.id,
+                              status: "denied",
+                              reason: equipmentDecisionReason.trim(),
+                            }).catch((error) => setEquipmentDecisionError(error instanceof Error ? error.message : "The decision failed."))}
+                          >
+                            Decline equipment
+                          </Button>
+                        </div>
+                      </>
+                    )}
+                    {selectedBooking.equipmentDeclineReason && (
+                      <p className="text-sm text-red-700"><strong>Decline reason:</strong> {selectedBooking.equipmentDeclineReason}</p>
+                    )}
+                  </div>
+                </>
+              )}
             </div>
           )}
         </DialogContent>

@@ -5,7 +5,7 @@
  */
 
 import { getNextAvailableStart, clampStartToLibrary, clampEndToLibrary } from './dateTimeUtils';
-import { BOOKING_MIN_DURATION_MS } from '@/shared/bookingRules';
+import { ACADEMIC_PROGRAM_OPTIONS, BOOKING_MIN_DURATION_MS } from '@/shared/bookingRules';
 import { createEmptyEquipmentState, type EquipmentStateValue } from '../schemas/bookingSchema';
 
 // Re-export for convenience
@@ -77,6 +77,8 @@ export function deriveInitialBookingState(booking: any) {
       endTime: undefined,
       purpose: '',
       participants: 1,
+      name: '',
+      program: '',
       equipmentState: createEmptyEquipmentState(),
       equipmentOtherText: '',
     };
@@ -101,8 +103,9 @@ export function deriveInitialBookingState(booking: any) {
     endTime: booking.endTime ? new Date(booking.endTime) : undefined,
     purpose: booking.purpose || '',
     participants: booking.participants || 1,
+    name: booking.name || '',
+    program: ACADEMIC_PROGRAM_OPTIONS.includes(booking.program) ? booking.program : '',
     equipmentState,
     equipmentOtherText: equipmentOthers,
   };
 }
-

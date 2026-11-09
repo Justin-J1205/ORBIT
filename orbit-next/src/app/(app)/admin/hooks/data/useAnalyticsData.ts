@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { FacilityBooking, Facility } from "@shared/schema";
+import { FacilityBooking, Facility, Campus } from "@shared/schema";
 import { getTimestamp, getIsoWeekLabel, formatIsoWeekLabel } from "@admin";
 
 type DepartmentChartDatum = { name: string; value: number };
@@ -21,12 +21,33 @@ function abbreviateFacilityName(name: string | null | undefined): string {
 export function useAnalyticsData(
   allBookings: FacilityBooking[],
   facilities: Facility[],
-  getFacilityName: (id: string) => string | null
+  getFacilityName: (id: string) => string | null,
+  campuses: Campus[],
+  selectedCampusId: string,
 ) {
+  const campusOptions = useMemo(() => {
+    const options = campuses.map((campus) => ({ id: String(campus.id), name: campus.name }));
+    if (facilities.some((facility) => facility.campusId === null)) {
+      options.push({ id: "unassigned", name: "Unassigned campus" });
+    }
+    return options;
+  }, [campuses, facilities]);
+
+  const scopedBookings = useMemo(() => {
+    if (selectedCampusId === "all") return allBookings;
+    const facilityCampusById = new Map(facilities.map((facility) => [String(facility.id), facility.campusId]));
+    return allBookings.filter((booking) => {
+      const campusId = facilityCampusById.get(String(booking.facilityId));
+      return selectedCampusId === "unassigned"
+        ? campusId === null || campusId === undefined
+        : String(campusId) === selectedCampusId;
+    });
+  }, [allBookings, facilities, selectedCampusId]);
+
   const departmentChartData = useMemo<DepartmentChartDatum[]>(() => {
-    if (!allBookings.length) return [];
+    if (!scopedBookings.length) return [];
     const counts = new Map<string, number>();
-    for (const booking of allBookings) {
+    for (const booking of scopedBookings) {
       const facilityId = booking?.facilityId;
       const facilityName = getFacilityName(String(facilityId || 'unknown')) || 'Unspecified';
       const displayName = abbreviateFacilityName(facilityName);
@@ -36,12 +57,12 @@ export function useAnalyticsData(
       .map(([name, value]) => ({ name, value }))
       .sort((a, b) => b.value - a.value)
       .slice(0, 12);
-  }, [allBookings, facilities]);
+  }, [scopedBookings, facilities, getFacilityName]);
 
   const facilityUtilizationData = useMemo<FacilityUtilizationDatum[]>(() => {
-    if (!allBookings.length) return [];
+    if (!scopedBookings.length) return [];
     const map = new Map<string, FacilityUtilizationDatum>();
-    for (const booking of allBookings) {
+    for (const booking of scopedBookings) {
       const start = booking?.startTime ? new Date(booking.startTime) : null;
       const end = booking?.endTime ? new Date(booking.endTime) : null;
       if (!start || !end || Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) continue;
@@ -61,12 +82,12 @@ export function useAnalyticsData(
       .sort((a, b) => b.hours - a.hours)
       .slice(0, 10)
       .map(item => ({ ...item, hours: Math.round(item.hours * 10) / 10 }));
-  }, [allBookings, facilities]);
+  }, [scopedBookings, facilities, getFacilityName]);
 
   const weeklyTrendData = useMemo<WeeklyTrendDatum[]>(() => {
-    if (!allBookings.length) return [];
+    if (!scopedBookings.length) return [];
     const bucket = new Map<string, { total: number; approved: number; pending: number }>();
-    for (const booking of allBookings) {
+    for (const booking of scopedBookings) {
       if (!booking?.startTime) continue;
       const start = new Date(booking.startTime);
       if (Number.isNaN(start.getTime())) continue;
@@ -90,11 +111,12 @@ export function useAnalyticsData(
       approved: counts.approved,
       pending: counts.pending,
     }));
-  }, [allBookings]);
+  }, [scopedBookings]);
 
   return {
     departmentChartData,
     facilityUtilizationData,
     weeklyTrendData,
+    campusOptions,
   };
 }

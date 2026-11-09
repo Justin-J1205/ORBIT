@@ -5,7 +5,7 @@
  * This component orchestrates the booking creation flow with minimal custom logic.
  */
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { format } from 'date-fns';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -16,6 +16,7 @@ import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/ui';
 import { useAuth } from '@/hooks/data';
 import { apiRequest } from '@/lib/api';
+import { enqueueOfflineBooking, readOfflineBookingQueue, removeOfflineBooking } from '@/lib/offlineBookingQueue';
 import { createBookingSchema } from '../schemas/bookingSchema';
 import {
   getDefaultStartTime,
@@ -61,8 +62,10 @@ export function BookingModalContent({
   });
   const { toast } = useToast();
   const { user } = useAuth();
+  const userId = user?.id;
   const isAdmin = user?.role === 'admin';
   const queryClient = useQueryClient();
+  const syncingOfflineQueue = useRef(false);
 
   // Get filtered facilities
   const facilities = useMemo(() => 
@@ -95,6 +98,8 @@ export function BookingModalContent({
       endTime: defaultEndTime,
       purpose: initialBookingState.purpose,
       participants: initialBookingState.participants,
+      name: initialBookingState.name,
+      program: initialBookingState.program,
       reminderOptIn: true,
       reminderLeadMinutes: 60,
     },
@@ -166,10 +171,12 @@ export function BookingModalContent({
     campusName?: string;
     startTime: Date;
     endTime: Date;
+    offlineQueued?: boolean;
   } | null>(null);
 
   const createBookingMutation = useMutation({
     mutationFn: async (data: BookingFormData) => {
+      const clientRequestId = bookingToEdit ? undefined : globalThis.crypto.randomUUID();
       const bookingData = {
         ...data,
         facilityId: parseInt(data.facilityId),
@@ -178,16 +185,34 @@ export function BookingModalContent({
         equipment: buildEquipmentPayload(equipmentState, equipmentOtherText),
         reminderOptIn: data.reminderOptIn,
         reminderLeadMinutes: data.reminderLeadMinutes,
+        ...(clientRequestId ? { clientRequestId } : {}),
       };
-      
-      const response = await apiRequest(
-        bookingToEdit ? "PUT" : "POST",
-        bookingToEdit ? `/api/bookings/${bookingToEdit.id}` : "/api/bookings",
-        bookingData
-      );
-      return response.json();
+
+      try {
+        const response = await apiRequest(
+          bookingToEdit ? "PUT" : "POST",
+          bookingToEdit ? `/api/bookings/${bookingToEdit.id}` : "/api/bookings",
+          bookingData
+        );
+        return response.json();
+      } catch (error) {
+        const statusCode = Number((error as Error).message.match(/^(\d{3}):/)?.[1]);
+        const authFailure = error instanceof Error && /session expired|unauthorized/i.test(error.message);
+        const shouldQueue = !bookingToEdit
+          && user?.id
+          && !authFailure
+          && (!Number.isFinite(statusCode) || statusCode === 0 || statusCode >= 500);
+        if (!shouldQueue || !clientRequestId || !user?.id) throw error;
+
+        enqueueOfflineBooking(user.id, {
+          clientRequestId,
+          payload: bookingData,
+          createdAt: new Date().toISOString(),
+        });
+        return { offlineQueued: true };
+      }
     },
-    onSuccess: async () => {
+    onSuccess: async (result: { offlineQueued?: boolean }) => {
       const bookedFacilityName = selectedFacility?.name || 'Facility';
       const bookedStart = startTimeValue;
       const bookedEnd = endTimeValue;
@@ -201,9 +226,11 @@ export function BookingModalContent({
       }
 
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["/api/bookings"] }),
-        queryClient.invalidateQueries({ queryKey: ["/api/notifications"] }),
-        queryClient.invalidateQueries({ queryKey: ["/api/admin/alerts"] }),
+        ...(result?.offlineQueued ? [] : [
+          queryClient.invalidateQueries({ queryKey: ["/api/bookings"] }),
+          queryClient.invalidateQueries({ queryKey: ["/api/notifications"] }),
+          queryClient.invalidateQueries({ queryKey: ["/api/admin/alerts"] }),
+        ]),
       ]);
       setIsSubmitting(false);
       setIsProcessing(false);
@@ -214,7 +241,14 @@ export function BookingModalContent({
         campusName,
         startTime: bookedStart,
         endTime: bookedEnd,
+        offlineQueued: result?.offlineQueued,
       });
+      if (result?.offlineQueued) {
+        toast({
+          title: "Saved offline",
+          description: "This booking request will sync automatically when you are back online.",
+        });
+      }
     },
     onError: (error: any) => {
       setIsSubmitting(false);
@@ -237,6 +271,61 @@ export function BookingModalContent({
       });
     },
   });
+
+  useEffect(() => {
+    if (!userId || typeof window === "undefined") return;
+
+    const syncQueue = async () => {
+      if (!navigator.onLine || syncingOfflineQueue.current) return;
+      syncingOfflineQueue.current = true;
+      let syncedAny = false;
+      try {
+        const queuedBookings = readOfflineBookingQueue(userId);
+        for (const queued of queuedBookings) {
+          try {
+            await apiRequest("POST", "/api/bookings", queued.payload);
+            removeOfflineBooking(userId, queued.clientRequestId);
+            syncedAny = true;
+          } catch (error) {
+            const statusCode = Number((error as Error).message.match(/^(\d{3}):/)?.[1]);
+            if (statusCode >= 400 && statusCode < 500 && statusCode !== 401) {
+              removeOfflineBooking(userId, queued.clientRequestId);
+              toast({
+                title: "Offline booking could not be submitted",
+                description: error instanceof Error ? error.message.replace(/^\d{3}:\s*/, "") : "The request was rejected. Please submit a new booking.",
+                variant: "destructive",
+              });
+              continue;
+            }
+            if (statusCode !== 401) {
+              console.error("[booking] Offline booking sync failed; the request remains queued.", error);
+            }
+            break;
+          }
+        }
+        if (syncedAny) {
+          await queryClient.invalidateQueries({ queryKey: ["/api/bookings"] });
+          toast({
+            title: "Offline bookings synced",
+            description: "Your booking request was submitted and is waiting for administrator approval.",
+          });
+        }
+      } catch (error) {
+        console.error("[booking] Unable to read or sync the offline booking queue.", error);
+        toast({
+          title: "Offline queue error",
+          description: error instanceof Error ? error.message : "The saved booking queue could not be read.",
+          variant: "destructive",
+        });
+      } finally {
+        syncingOfflineQueue.current = false;
+      }
+    };
+
+    void syncQueue();
+    window.addEventListener("online", syncQueue);
+    return () => window.removeEventListener("online", syncQueue);
+  }, [userId]);
 
   const onSubmit = (data: BookingFormData) => {
     const now = Date.now();
@@ -313,8 +402,8 @@ export function BookingModalContent({
       {/* Success Dialog */}
       <Dialog open={!!successInfo} onOpenChange={(open) => { if (!open) { setSuccessInfo(null); handleClose(); } }}>
         <DialogContent className="max-w-sm text-center px-8 py-10">
-          <DialogTitle className="sr-only">Booking Confirmed</DialogTitle>
-          <DialogDescription className="sr-only">Your booking has been scheduled.</DialogDescription>
+          <DialogTitle className="sr-only">Booking Request Submitted</DialogTitle>
+          <DialogDescription className="sr-only">Your booking request is waiting for administrator approval or will sync when online.</DialogDescription>
           {/* Animated checkmark */}
           <div className="flex justify-center mb-5">
             <div className="w-20 h-20 rounded-full bg-emerald-100 flex items-center justify-center animate-in zoom-in-50 duration-300">
@@ -327,7 +416,16 @@ export function BookingModalContent({
             </div>
           </div>
 
-          <h2 className="text-xl font-bold text-gray-900 mb-1">{bookingToEdit ? 'Booking Updated!' : 'Booking Scheduled!'}</h2>
+          <h2 className="text-xl font-bold text-gray-900 mb-1">
+            {successInfo?.offlineQueued ? "Saved offline" : bookingToEdit ? "Booking Updated" : "Booking Request Submitted"}
+          </h2>
+          {!bookingToEdit && (
+            <p className="mb-4 text-sm text-gray-600">
+              {successInfo?.offlineQueued
+                ? "This request will sync automatically when you are back online."
+                : "Your request is pending administrator approval."}
+            </p>
+          )}
           {successInfo && (
             <div className="rounded-xl border border-gray-100 bg-gray-50 px-5 py-4 mb-6 text-left space-y-3">
 

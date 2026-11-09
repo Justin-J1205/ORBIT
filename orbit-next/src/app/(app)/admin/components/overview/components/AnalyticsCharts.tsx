@@ -10,9 +10,38 @@ import {
 import type { AnalyticsChartsProps } from "../../admin/types";
 import { EmptyState } from "./EmptyState";
 
-export function AnalyticsCharts({ DEBUG_ANALYTICS_CHARTS, PIE_CHART_COLORS, FACILITY_BAR_COLORS, WEEKLY_LINE_COLORS, departmentChartData, facilityUtilizationData, weeklyTrendData }: AnalyticsChartsProps) {
+export function AnalyticsCharts({
+  DEBUG_ANALYTICS_CHARTS,
+  PIE_CHART_COLORS,
+  FACILITY_BAR_COLORS,
+  WEEKLY_LINE_COLORS,
+  departmentChartData,
+  facilityUtilizationData,
+  weeklyTrendData,
+  campusOptions,
+  selectedAnalyticsCampusId,
+  setSelectedAnalyticsCampusId,
+}: AnalyticsChartsProps) {
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4 md:gap-6">
+    <div className="space-y-4">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 rounded-xl border border-gray-200 bg-white p-4">
+        <div>
+          <h3 className="text-sm font-semibold text-gray-900">Analytics campus</h3>
+          <p className="text-xs text-gray-600">Filter all booking charts by campus.</p>
+        </div>
+        <select
+          aria-label="Filter analytics by campus"
+          value={selectedAnalyticsCampusId}
+          onChange={(event) => setSelectedAnalyticsCampusId(event.target.value)}
+          className="min-h-10 rounded-md border border-gray-300 bg-white px-3 text-sm text-gray-900"
+        >
+          <option value="all">All campuses</option>
+          {campusOptions.map((campus) => (
+            <option key={campus.id} value={campus.id}>{campus.name}</option>
+          ))}
+        </select>
+      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4 md:gap-6">
       {DEBUG_ANALYTICS_CHARTS.department && (
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6">
           <div className="flex items-center justify-between mb-4">
@@ -93,6 +122,7 @@ export function AnalyticsCharts({ DEBUG_ANALYTICS_CHARTS, PIE_CHART_COLORS, FACI
           )}
         </div>
       )}
+      </div>
     </div>
   );
 }

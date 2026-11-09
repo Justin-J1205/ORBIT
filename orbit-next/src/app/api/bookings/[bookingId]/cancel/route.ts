@@ -46,6 +46,23 @@ export async function POST(
       return NextResponse.json({ message: "You are not allowed to cancel this booking." }, { status: 403 });
     }
 
+    let adminReason = "";
+    if (isAdmin && !isArrivalTimeout) {
+      let payload: unknown;
+      try {
+        payload = await request.json();
+      } catch {
+        return NextResponse.json({ message: "A cancellation reason is required." }, { status: 400 });
+      }
+      const rawReason = payload && typeof payload === "object" && !Array.isArray(payload)
+        ? (payload as Record<string, unknown>).reason
+        : undefined;
+      adminReason = typeof rawReason === "string" ? rawReason.trim() : "";
+      if (adminReason.length < 5 || adminReason.length > 1000) {
+        return NextResponse.json({ message: "Enter a cancellation reason between 5 and 1000 characters." }, { status: 400 });
+      }
+    }
+
     const now = new Date();
     const start = new Date(booking.startTime);
     const end = new Date(booking.endTime);
@@ -69,10 +86,26 @@ export async function POST(
       );
     }
 
-    await storage.updateFacilityBooking(bookingId, {
-      status: "cancelled",
+    const cancellationUpdates = {
+      status: "cancelled" as const,
+      cancellationReason: adminReason || null,
+      adminId: isAdmin ? requesterId : null,
+      adminResponse: adminReason || booking.adminResponse,
       updatedAt: new Date(),
-    });
+    };
+    if (isAdmin && !isArrivalTimeout) {
+      await storage.updateFacilityBookingWithActivity(bookingId, cancellationUpdates, {
+        id: randomUUID(),
+        action: "Booking Cancelled by Admin",
+        details: `Booking ${bookingId} for facility ${booking.facilityId} cancelled by administrator ${requesterId}; reason: ${adminReason}.`,
+        userId: requesterId,
+        ipAddress: request.headers.get("x-forwarded-for"),
+        userAgent: request.headers.get("user-agent"),
+        createdAt: new Date(),
+      }, booking.status);
+    } else {
+      await storage.updateFacilityBooking(bookingId, cancellationUpdates);
+    }
 
     try {
       const user = await storage.getUser(booking.userId).catch(() => null);
@@ -158,21 +191,26 @@ export async function POST(
         details = `User ended booking for ${facility?.name || `Facility ${booking.facilityId}`} (${start.toLocaleString()} - ${end.toLocaleString()})`;
       }
       
-      await storage.createActivityLog({
-        id: randomUUID(),
-        action,
-        details,
-        userId: booking.userId,
-        ipAddress: null,
-        userAgent: request.headers.get("user-agent") ?? null,
-        createdAt: new Date(),
-      });
+      if (!(isAdmin && !isArrivalTimeout)) {
+        await storage.createActivityLog({
+          id: randomUUID(),
+          action,
+          details,
+          userId: booking.userId,
+          ipAddress: null,
+          userAgent: request.headers.get("user-agent") ?? null,
+          createdAt: new Date(),
+        });
+      }
     } catch (error) {
       console.warn("[bookings] Failed to log cancellation", error);
     }
 
     return NextResponse.json({ success: true }, { status: 200 });
   } catch (error) {
+    if (error instanceof Error && error.name === "ConflictError") {
+      return NextResponse.json({ message: error.message }, { status: 409 });
+    }
     console.error("[bookings] Failed to cancel booking:", error);
     return NextResponse.json({ message: "Failed to cancel booking." }, { status: 500 });
   }

@@ -1,5 +1,5 @@
 // Section component exports
-// Removed SettingsSection (System Settings) export
+export { SettingsSection } from "./settings";
 export { SystemAlertsSection } from "./system-alerts";
 export { UserManagementSection } from "./user-management";
 export { BookingManagementSection } from "./booking-management";

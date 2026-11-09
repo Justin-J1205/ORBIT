@@ -99,7 +99,15 @@ create table if not exists public."facility_bookings" (
   "end_time" timestamp without time zone not null,
   "purpose" text not null,
   "participants" integer not null,
+  "name" character varying(200),
+  "program" character varying(100),
   "equipment" jsonb,
+  "client_request_id" uuid,
+  "decline_reason" text,
+  "cancellation_reason" text,
+  "reschedule_reason" text,
+  "equipment_request_status" character varying,
+  "equipment_decline_reason" text,
   "arrival_confirmation_deadline" timestamp without time zone,
   "arrival_confirmed" boolean default false,
   "status" character varying default 'pending'::character varying not null,
@@ -112,6 +120,9 @@ create table if not exists public."facility_bookings" (
   "created_at" timestamp without time zone default now() not null,
   "updated_at" timestamp without time zone default now() not null
 );
+
+create unique index if not exists "facility_bookings_client_request_id_unique"
+  on public."facility_bookings" ("client_request_id");
 
 create table if not exists public."faqs" (
   "id" uuid default gen_random_uuid() not null,

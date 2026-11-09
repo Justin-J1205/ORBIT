@@ -1,4 +1,4 @@
-import { Dispatch, SetStateAction, useCallback, useEffect, useMemo, useState } from "react";
+import { Dispatch, SetStateAction, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Plus, Calendar, ChevronDown, Loader2, CheckCircle2 } from "lucide-react";
 import { format, startOfDay, endOfDay, parseISO } from "date-fns";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -34,24 +34,29 @@ interface MyBookingsSectionProps {
 }
 
 function Countdown({ expiry, onExpire }: { expiry: string | Date | undefined; onExpire?: () => void }) {
-  const [now, setNow] = useState(Date.now());
-  const [hasExpired, setHasExpired] = useState(false);
+  const [now, setNow] = useState<number | null>(null);
+  const expiredFor = useRef<number | null>(null);
 
   useEffect(() => {
+    const initialTimeout = window.setTimeout(() => setNow(Date.now()), 0);
     const interval = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(interval);
+    return () => {
+      window.clearTimeout(initialTimeout);
+      clearInterval(interval);
+    };
   }, []);
 
   useEffect(() => {
-    if (!expiry || hasExpired) return;
-    const ms = new Date(expiry).getTime() - now;
-    if (ms <= 0) {
-      setHasExpired(true);
+    if (!expiry || now === null) return;
+    const expiryTime = new Date(expiry).getTime();
+    if (expiryTime <= now && expiredFor.current !== expiryTime) {
+      expiredFor.current = expiryTime;
       onExpire?.();
     }
-  }, [expiry, now, onExpire, hasExpired]);
+  }, [expiry, now, onExpire]);
 
   if (!expiry) return <span />;
+  if (now === null) return <span className="font-mono text-base font-semibold">--:--:--</span>;
 
   const diff = Math.max(0, new Date(expiry).getTime() - now);
   const hours = Math.floor(diff / 3_600_000);
@@ -91,6 +96,25 @@ export function MyBookingsSection({
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>("all");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  const [currentTime, setCurrentTime] = useState<number | null>(null);
+
+  useEffect(() => {
+    const initialTimeout = window.setTimeout(() => setCurrentTime(Date.now()), 0);
+    const interval = setInterval(() => setCurrentTime(Date.now()), 60_000);
+    return () => {
+      window.clearTimeout(initialTimeout);
+      clearInterval(interval);
+    };
+  }, []);
+
+  const getRenderBookingStatus = useCallback((booking: any) => {
+    if (currentTime !== null) return getBookingStatus(booking);
+    if (booking.status === "approved") return { label: "Scheduled", badgeClass: "bg-yellow-100 text-yellow-800" };
+    if (booking.status === "pending") return { label: "Pending", badgeClass: "bg-blue-100 text-blue-800" };
+    if (booking.status === "denied") return { label: "Denied", badgeClass: "denied" };
+    if (booking.status === "cancelled") return { label: "Cancelled", badgeClass: "cancelled" };
+    return { label: booking.status, badgeClass: booking.status };
+  }, [currentTime, getBookingStatus]);
 
   const queryClient = useQueryClient();
   const confirmArrivalMutation = useMutation({
@@ -111,7 +135,7 @@ export function MyBookingsSection({
   // Filter bookings based on category + date range
   const filteredBookings = useMemo(() => {
     return userBookings.filter((booking) => {
-      const status = getBookingStatus(booking);
+      const status = getRenderBookingStatus(booking);
       // Category filter
       if (categoryFilter === "scheduled") {
         if (!["Scheduled", "Active", "Pending"].includes(status.label)) return false;
@@ -131,7 +155,7 @@ export function MyBookingsSection({
       }
       return true;
     });
-  }, [userBookings, getBookingStatus, categoryFilter, dateFrom, dateTo]);
+  }, [userBookings, getRenderBookingStatus, categoryFilter, dateFrom, dateTo]);
 
   useEffect(() => {
     if (!scrollToBookingId) return;
@@ -254,9 +278,9 @@ export function MyBookingsSection({
         </div>
       ) : (
         <div className="space-y-2">
-          {filteredBookings.map((booking) => {
-            const status = getBookingStatus(booking);
-            const id = String(booking.id || Math.random());
+          {filteredBookings.map((booking, index) => {
+            const status = getRenderBookingStatus(booking);
+            const id = String(booking.id ?? `booking-${index}`);
             const eq = booking.equipment || {};
             const items = Array.isArray(eq.items) ? eq.items : [];
             const hasOthers = eq.others && String(eq.others).trim().length > 0;
@@ -264,8 +288,8 @@ export function MyBookingsSection({
 
             return (
               <div
-                id={`booking-${booking.id}`}
-                key={booking.id}
+                id={`booking-${id}`}
+                key={id}
                 className="bg-white rounded-lg border border-gray-200 hover:border-pink-200 hover:shadow-sm transition-all duration-200 overflow-hidden"
               >
                 {/* Main card row — always visible */}
@@ -289,6 +313,8 @@ export function MyBookingsSection({
                       </div>
                       <div className="min-w-0">
                         <h4 className="font-semibold text-gray-900 text-sm leading-tight break-words">{getFacilityDisplay(booking.facilityId)}</h4>
+                        <p className="text-xs text-gray-600 mt-1 break-words">Name: {booking.name || "Not recorded"}</p>
+                        <p className="text-xs text-gray-600 break-words">Program: {booking.program || "Not recorded"}</p>
                         <div className="flex flex-wrap items-center gap-2 mt-1">
                           <span className="text-xs text-gray-500">Participants:</span>
                           <span className="px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800">{booking.participants || 0}</span>
@@ -331,7 +357,7 @@ export function MyBookingsSection({
                                 : "Cancelled by you"
                               : status.label}
                           </span>
-                          {booking.userId === user?.id && (booking.status === 'pending' || (booking.status === 'approved' && new Date(booking.startTime) > new Date())) && (
+                          {booking.userId === user?.id && (booking.status === 'pending' || (booking.status === 'approved' && currentTime !== null && new Date(booking.startTime).getTime() > currentTime)) && (
                             <button
                               type="button"
                               onClick={(e) => { e.stopPropagation(); onRescheduleBooking(booking); }}
@@ -477,6 +503,19 @@ export function MyBookingsSection({
                         )}
                       </div>
                     </div>
+                    {(booking.declineReason || booking.cancellationReason || booking.rescheduleReason || booking.equipmentRequestStatus) && (
+                      <div className="mt-3 rounded-lg border border-blue-100 bg-blue-50 p-3 text-sm text-blue-900">
+                        {booking.declineReason && <p><strong>Decline reason:</strong> {booking.declineReason}</p>}
+                        {booking.cancellationReason && <p><strong>Cancellation reason:</strong> {booking.cancellationReason}</p>}
+                        {booking.rescheduleReason && <p><strong>Last change reason:</strong> {booking.rescheduleReason}</p>}
+                        {booking.equipmentRequestStatus && (
+                          <p>
+                            <strong>Equipment request:</strong> {booking.equipmentRequestStatus}
+                            {booking.equipmentDeclineReason ? ` - ${booking.equipmentDeclineReason}` : ""}
+                          </p>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>

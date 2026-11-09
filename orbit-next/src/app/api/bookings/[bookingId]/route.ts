@@ -14,7 +14,7 @@ import {
   setArrivalConfirmationDeadline,
 } from "@/server/bookings/helpers";
 import { db } from "@/server/config";
-import { facilityBookings } from "@shared/schema";
+import { facilityBookings, insertFacilityBookingSchema } from "@shared/schema";
 import { eq } from "drizzle-orm";
 
 export const runtime = "nodejs";
@@ -62,6 +62,24 @@ export async function PUT(
       }
     }
 
+    const adminOnlyFields = ["status", "arrivalConfirmed", "arrivalConfirmationDeadline", "adminResponse"];
+    if (isAdmin && adminOnlyFields.some((field) => Object.prototype.hasOwnProperty.call(payload, field))) {
+      return NextResponse.json(
+        { message: "Use the admin booking action endpoint to change booking status or arrival confirmation." },
+        { status: 400 }
+      );
+    }
+
+    const identityResult = insertFacilityBookingSchema
+      .pick({ name: true, program: true })
+      .safeParse(payload);
+    if (!identityResult.success) {
+      return NextResponse.json(
+        { message: identityResult.error.issues[0]?.message ?? "A booking name and program are required." },
+        { status: 400 }
+      );
+    }
+
     if (typeof purpose !== "string" || !purpose.trim() || purpose.length > 200 || !startTime || !endTime || facilityId === undefined || facilityId === null) {
       return NextResponse.json(
         { message: "A purpose of 1 to 200 characters, start time, end time, and facilityId are required." },
@@ -71,6 +89,15 @@ export async function PUT(
 
     const parsedStartTime = new Date(startTime);
     const parsedEndTime = new Date(endTime);
+    const isScheduleChange = parsedStartTime.getTime() !== new Date(existingBooking.startTime).getTime()
+      || parsedEndTime.getTime() !== new Date(existingBooking.endTime).getTime()
+      || Number(facilityId) !== existingBooking.facilityId;
+    if (isAdmin && isScheduleChange) {
+      return NextResponse.json(
+        { message: "Use the admin booking management reschedule action so the reason and audit record are saved together." },
+        { status: 400 }
+      );
+    }
 
     if (Number.isNaN(parsedStartTime.getTime()) || Number.isNaN(parsedEndTime.getTime())) {
       return NextResponse.json({ message: "Invalid start or end time format." }, { status: 400 });
@@ -268,6 +295,8 @@ export async function PUT(
       facilityId: parsedFacilityId,
       startTime: parsedStartTime,
       endTime: parsedEndTime,
+      name: identityResult.data.name,
+      program: identityResult.data.program,
       updatedAt: new Date(),
     };
 
@@ -387,7 +416,7 @@ export async function PUT(
         id: randomUUID(),
         action: "Booking Updated",
         details: `Booking ${bookingId} for ${facility?.name || `Facility ${parsedFacilityId}`} updated to ${parsedStartTime.toLocaleString()} - ${parsedEndTime.toLocaleString()}`,
-        userId: bookingOwnerId,
+        userId: isAdmin ? requesterId : bookingOwnerId,
         ipAddress: request.headers.get("x-forwarded-for") || null,
         userAgent: request.headers.get("user-agent"),
         createdAt: new Date(),

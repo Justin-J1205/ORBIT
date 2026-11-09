@@ -301,6 +301,16 @@ export function BookingPreviews({ upcomingBookings, recentBookings, scheduledCou
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
+                  <h3 className="text-sm font-semibold text-gray-700 mb-1">Name</h3>
+                  <p className="text-base text-gray-900">{selectedBooking.name || "Not recorded"}</p>
+                </div>
+                <div>
+                  <h3 className="text-sm font-semibold text-gray-700 mb-1">Program</h3>
+                  <p className="text-base text-gray-900">{selectedBooking.program || "Not recorded"}</p>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
                   <h3 className="text-sm font-semibold text-gray-700 mb-1">Start Time</h3>
                   <p className="text-base text-gray-900">{format(new Date(selectedBooking.startTime), "PPpp")}</p>
                 </div>

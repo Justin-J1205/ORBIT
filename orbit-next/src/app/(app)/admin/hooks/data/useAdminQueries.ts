@@ -2,7 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/api";
-import { User, FacilityBooking, SystemAlert, ActivityLog, Facility, ReportSchedule } from "@shared/schema";
+import { User, FacilityBooking, SystemAlert, ActivityLog, Facility, Campus, ReportSchedule } from "@shared/schema";
 
 type UseAdminQueriesProps = {
   isAdmin: boolean;
@@ -24,6 +24,7 @@ type UseAdminQueriesReturn = {
   facilitiesData: Facility[];
   facilitiesLoading: boolean;
   facilitiesError: boolean;
+  campusesData: Campus[];
   usersData: User[];
   usersDataLoading: boolean;
   usersDataError: boolean;
@@ -92,6 +93,16 @@ export function useAdminQueries({ isAdmin }: UseAdminQueriesProps): UseAdminQuer
     ...commonQueryOpts,
   });
 
+  const { data: campusesData = [] } = useQuery({
+    queryKey: ["/api/campuses"],
+    queryFn: async () => {
+      const res = await apiRequest("GET", "/api/campuses");
+      return res.json();
+    },
+    enabled: isAdmin,
+    ...commonQueryOpts,
+  });
+
   const { data: usersDataQ = [], isLoading: usersDataLoading, isError: usersDataError } = useQuery({
     queryKey: ['/api/admin/users'],
     queryFn: async () => {
@@ -139,6 +150,7 @@ export function useAdminQueries({ isAdmin }: UseAdminQueriesProps): UseAdminQuer
     facilitiesData,
     facilitiesLoading,
     facilitiesError,
+    campusesData,
     usersData: usersDataQ,
     usersDataLoading,
     usersDataError,

@@ -28,6 +28,9 @@ export interface AnalyticsChartsProps {
   departmentChartData: Array<{ name: string; value: number }>;
   facilityUtilizationData: Array<{ name: string; hours: number; bookings: number }>;
   weeklyTrendData: Array<{ week: string; total: number; approved: number; pending: number }>;
+  campusOptions: Array<{ id: string; name: string }>;
+  selectedAnalyticsCampusId: string;
+  setSelectedAnalyticsCampusId: (value: string) => void;
 }
 
 export interface AvailabilityPreviewProps {
