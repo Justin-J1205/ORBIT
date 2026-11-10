@@ -12,7 +12,7 @@ export function useBookingMutations() {
       const res = await apiRequest("POST", `/api/admin/bookings/${bookingId}/actions`, action);
       return res.json();
     },
-    onSuccess: async () => {
+    onSuccess: async (_data, variables) => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["/api/admin/bookings"] }),
         queryClient.invalidateQueries({ queryKey: ["/api/bookings/pending"] }),
@@ -22,7 +22,23 @@ export function useBookingMutations() {
         queryClient.invalidateQueries({ queryKey: ["/api/admin/stats"] }),
         queryClient.invalidateQueries({ queryKey: ["/api/admin/activity"] }),
       ]);
-      toast({ title: "Booking updated", description: "The booking action was recorded and the requester was notified." });
+      await Promise.all([
+        queryClient.refetchQueries({ queryKey: ["/api/admin/bookings"] }),
+        queryClient.refetchQueries({ queryKey: ["/api/bookings/pending"] }),
+        queryClient.refetchQueries({ queryKey: ["/api/bookings"] }),
+      ]);
+
+      const successMessages: Record<string, string> = {
+        approve: "Booking successfully approved.",
+        decline: "Booking successfully declined.",
+        cancel: "Booking successfully cancelled.",
+        modify: "Booking successfully updated.",
+        reschedule: "Booking successfully rescheduled.",
+      };
+      toast({
+        title: successMessages[variables.action] || "Booking action completed.",
+        description: "The admin booking list has been refreshed.",
+      });
     },
     onError: (error: Error) => {
       toast({ title: "Action failed", description: error.message, variant: "destructive" });

@@ -194,6 +194,7 @@ function AdminDashboardContent() {
         onScheduleSortChange={state.setScheduleSort}
         onSchedulePaginationPrev={handlers.handleSchedulePaginationPrev}
         onSchedulePaginationNext={handlers.handleSchedulePaginationNext}
+        isAdmin={isAdmin}
         PIE_CHART_COLORS={PIE_CHART_COLORS}
         FACILITY_BAR_COLORS={FACILITY_BAR_COLORS}
         WEEKLY_LINE_COLORS={WEEKLY_LINE_COLORS}

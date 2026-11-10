@@ -36,6 +36,10 @@ export type ActiveBookingsTabProps = {
     mutateAsync: (input: { bookingId: string; status: "approved" | "denied"; reason?: string }) => Promise<unknown>;
     isPending: boolean;
   };
+  adminBookingActionMutation: {
+    mutateAsync: (input: { bookingId: string; action: string; reason?: string }) => Promise<unknown>;
+    isPending: boolean;
+  };
 };
 
 export function ActiveBookingsTab(props: ActiveBookingsTabProps) {
@@ -63,17 +67,22 @@ export function ActiveBookingsTab(props: ActiveBookingsTabProps) {
     CountdownComponent,
     renderPagination,
     equipmentRequestDecisionMutation,
+    adminBookingActionMutation,
   } = props;
 
   const [selectedBooking, setSelectedBooking] = useState<FacilityBooking | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [equipmentDecisionReason, setEquipmentDecisionReason] = useState("");
   const [equipmentDecisionError, setEquipmentDecisionError] = useState("");
+  const [adminActionReason, setAdminActionReason] = useState("");
+  const [adminActionError, setAdminActionError] = useState("");
 
   const handleBookingClick = (booking: FacilityBooking) => {
     setSelectedBooking(booking);
     setEquipmentDecisionReason("");
     setEquipmentDecisionError("");
+    setAdminActionReason("");
+    setAdminActionError("");
     setIsModalOpen(true);
   };
 
@@ -81,6 +90,47 @@ export function ActiveBookingsTab(props: ActiveBookingsTabProps) {
     setIsModalOpen(false);
     setSelectedBooking(null);
   };
+
+  const runEquipmentDecision = async (status: "approved" | "denied") => {
+    if (!selectedBooking) return;
+    if (status === "denied" && equipmentDecisionReason.trim().length < 5) {
+      setEquipmentDecisionError("Enter a decline reason of at least 5 characters.");
+      return;
+    }
+    setEquipmentDecisionError("");
+    try {
+      await equipmentRequestDecisionMutation.mutateAsync({
+        bookingId: selectedBooking.id,
+        status,
+        reason: equipmentDecisionReason.trim(),
+      });
+      closeModal();
+    } catch (error) {
+      setEquipmentDecisionError(error instanceof Error ? error.message : "The decision failed.");
+    }
+  };
+
+  const cancelActiveBooking = async () => {
+    if (!selectedBooking) return;
+    if (adminActionReason.trim().length < 5) {
+      setAdminActionError("Enter a cancellation reason of at least 5 characters.");
+      return;
+    }
+    setAdminActionError("");
+    try {
+      await adminBookingActionMutation.mutateAsync({
+        bookingId: selectedBooking.id,
+        action: "cancel",
+        reason: adminActionReason.trim(),
+      });
+      closeModal();
+    } catch (error) {
+      setAdminActionError(error instanceof Error ? error.message : "The booking could not be cancelled.");
+    }
+  };
+
+  const hasPendingEquipment = (booking: FacilityBooking) =>
+    Boolean(booking.equipment) && booking.equipmentRequestStatus === "pending";
 
   return (
     <div className="bg-gray-50 rounded-lg p-4 sm:p-6 mt-4 md:mt-0">
@@ -131,6 +181,11 @@ export function ActiveBookingsTab(props: ActiveBookingsTabProps) {
                   </div>
                   <div className="flex flex-wrap gap-2 pl-11">
                     <span className="inline-flex items-center justify-center px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">Active</span>
+                    {!!booking.equipment && booking.equipmentRequestStatus && (
+                      <Badge variant={booking.equipmentRequestStatus === "approved" ? "default" : booking.equipmentRequestStatus === "denied" ? "destructive" : "secondary"}>
+                        Equipment {booking.equipmentRequestStatus}
+                      </Badge>
+                    )}
                   </div>
                   {booking.purpose && <div className="pl-11">{renderPurposeButton(booking, 'active-mobile')}</div>}
                   {!!booking.equipment && (
@@ -172,6 +227,13 @@ export function ActiveBookingsTab(props: ActiveBookingsTabProps) {
                           )}
                         </div>
                       </div>
+                    </div>
+                  )}
+                  {isAdmin && (
+                    <div className="pl-11" onClick={(event) => event.stopPropagation()}>
+                      <Button type="button" size="sm" variant="outline" onClick={() => handleBookingClick(booking)}>
+                        {hasPendingEquipment(booking) ? "Review equipment" : "Booking details & actions"}
+                      </Button>
                     </div>
                   )}
                   {!booking.equipment && booking.arrivalConfirmationDeadline && !booking.arrivalConfirmed && (
@@ -248,6 +310,11 @@ export function ActiveBookingsTab(props: ActiveBookingsTabProps) {
                     <div className="flex flex-col gap-2.5">
                       <div className="flex items-center gap-2">
                         <span className="px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800 whitespace-nowrap">Active</span>
+                        {!!booking.equipment && booking.equipmentRequestStatus && (
+                          <Badge variant={booking.equipmentRequestStatus === "approved" ? "default" : booking.equipmentRequestStatus === "denied" ? "destructive" : "secondary"}>
+                            Equipment {booking.equipmentRequestStatus}
+                          </Badge>
+                        )}
                       </div>
                       {booking.arrivalConfirmationDeadline && !booking.arrivalConfirmed && (
                         <div className="flex flex-col gap-2 items-end">
@@ -291,6 +358,19 @@ export function ActiveBookingsTab(props: ActiveBookingsTabProps) {
                           </div>
                         </div>
                       </div>
+                    )}
+                    {isAdmin && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          handleBookingClick(booking);
+                        }}
+                      >
+                        {hasPendingEquipment(booking) ? "Review equipment" : "Booking actions"}
+                      </Button>
                     )}
                   </div>
                 </div>
@@ -454,10 +534,7 @@ export function ActiveBookingsTab(props: ActiveBookingsTabProps) {
                             type="button"
                             size="sm"
                             disabled={equipmentRequestDecisionMutation.isPending}
-                            onClick={() => void equipmentRequestDecisionMutation.mutateAsync({
-                              bookingId: selectedBooking.id,
-                              status: "approved",
-                            }).catch((error) => setEquipmentDecisionError(error instanceof Error ? error.message : "The decision failed."))}
+                            onClick={() => void runEquipmentDecision("approved")}
                           >
                             Approve equipment
                           </Button>
@@ -466,13 +543,33 @@ export function ActiveBookingsTab(props: ActiveBookingsTabProps) {
                             size="sm"
                             variant="destructive"
                             disabled={equipmentRequestDecisionMutation.isPending || equipmentDecisionReason.trim().length < 5}
-                            onClick={() => void equipmentRequestDecisionMutation.mutateAsync({
-                              bookingId: selectedBooking.id,
-                              status: "denied",
-                              reason: equipmentDecisionReason.trim(),
-                            }).catch((error) => setEquipmentDecisionError(error instanceof Error ? error.message : "The decision failed."))}
+                            onClick={() => void runEquipmentDecision("denied")}
                           >
                             Decline equipment
+                          </Button>
+                        </div>
+                      </>
+                    )}
+                    {Boolean(isAdmin && selectedBooking.status === "approved") && (
+                      <>
+                        <Separator />
+                        <div className="space-y-2 rounded-md border border-gray-200 p-3">
+                          <h3 className="text-sm font-semibold text-gray-900">Cancel active booking</h3>
+                          <Textarea
+                            value={adminActionReason}
+                            maxLength={1000}
+                            onChange={(event) => setAdminActionReason(event.target.value)}
+                            placeholder="A cancellation reason of at least 5 characters is required."
+                          />
+                          {adminActionError && <p role="alert" className="text-sm text-red-600">{adminActionError}</p>}
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="destructive"
+                            disabled={adminBookingActionMutation.isPending || adminActionReason.trim().length < 5}
+                            onClick={() => void cancelActiveBooking()}
+                          >
+                            Cancel booking
                           </Button>
                         </div>
                       </>

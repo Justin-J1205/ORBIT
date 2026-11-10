@@ -74,6 +74,8 @@ export function ScheduledBookingsTab(props: ScheduledBookingsTabProps) {
   const [nameInput, setNameInput] = useState("");
   const [programInput, setProgramInput] = useState("");
   const [actionError, setActionError] = useState("");
+  const lastUpcomingPage = Math.max(0, Math.ceil(upcomingBookingsFiltered.length / itemsPerPage) - 1);
+  const visibleUpcomingPage = Math.min(upcomingBookingsPage, lastUpcomingPage);
 
   const handleBookingClick = (booking: FacilityBooking) => {
     setSelectedBooking(booking);
@@ -126,6 +128,60 @@ export function ScheduledBookingsTab(props: ScheduledBookingsTabProps) {
     }
   };
 
+  const approveBooking = async (booking: FacilityBooking) => {
+    try {
+      await adminBookingActionMutation.mutateAsync({
+        bookingId: booking.id,
+        action: "approve",
+      });
+    } catch (error) {
+      handleBookingClick(booking);
+      setActionError(error instanceof Error ? error.message : "The booking could not be approved.");
+    }
+  };
+
+  const renderAdminRowActions = (booking: FacilityBooking) => {
+    if (!isAdmin) return null;
+
+    const canReviewBooking = booking.status === "pending";
+    const canModifyBooking = booking.status === "pending"
+      || (booking.status === "approved" && new Date(booking.startTime) > new Date());
+    const hasPendingEquipment = Boolean(booking.equipment)
+      && booking.equipmentRequestStatus === "pending";
+
+    if (!canReviewBooking && !canModifyBooking && !hasPendingEquipment) return null;
+
+    return (
+      <div className="flex flex-wrap gap-2" onClick={(event) => event.stopPropagation()}>
+        {canReviewBooking && (
+          <>
+            <Button
+              type="button"
+              size="sm"
+              disabled={adminBookingActionMutation.isPending}
+              onClick={() => void approveBooking(booking)}
+            >
+              Approve
+            </Button>
+            <Button type="button" size="sm" variant="destructive" onClick={() => handleBookingClick(booking)}>
+              Decline
+            </Button>
+          </>
+        )}
+        {canModifyBooking && (
+          <Button type="button" size="sm" variant="outline" onClick={() => handleBookingClick(booking)}>
+            Modify / Reschedule
+          </Button>
+        )}
+        {hasPendingEquipment && (
+          <Button type="button" size="sm" variant="outline" onClick={() => handleBookingClick(booking)}>
+            Review equipment
+          </Button>
+        )}
+      </div>
+    );
+  };
+
   const runEquipmentDecision = async (status: "approved" | "denied") => {
     if (!selectedBooking) return;
     if (status === "denied" && reason.trim().length < 5) {
@@ -139,6 +195,9 @@ export function ScheduledBookingsTab(props: ScheduledBookingsTabProps) {
         status,
         reason: reason.trim(),
       });
+      setSelectedBooking((booking) => booking
+        ? { ...booking, equipmentRequestStatus: status }
+        : booking);
     } catch (error) {
       setActionError(error instanceof Error ? error.message : "The equipment decision could not be completed.");
     }
@@ -157,7 +216,7 @@ export function ScheduledBookingsTab(props: ScheduledBookingsTabProps) {
       {upcomingBookings.length > 0 ? (
         <div className="space-y-3">
           {upcomingBookingsFiltered
-            .slice(upcomingBookingsPage * itemsPerPage, (upcomingBookingsPage + 1) * itemsPerPage)
+            .slice(visibleUpcomingPage * itemsPerPage, (visibleUpcomingPage + 1) * itemsPerPage)
             .map((booking) => (
               <div key={booking.id} onClick={() => handleBookingClick(booking)} className="bg-white rounded-lg p-3 sm:p-4 border border-gray-200 hover:border-pink-200 hover:shadow-sm transition-all duration-200 cursor-pointer">
                 {/* Mobile layout */}
@@ -194,6 +253,11 @@ export function ScheduledBookingsTab(props: ScheduledBookingsTabProps) {
                     <span className={`inline-flex items-center justify-center px-3 py-1 rounded-full text-xs font-medium ${booking.status === "pending" ? "bg-blue-100 text-blue-800" : "bg-pink-100 text-pink-800"}`}>
                       {booking.status === "pending" ? "Pending Approval" : "Scheduled"}
                     </span>
+                    {!!booking.equipment && booking.equipmentRequestStatus && (
+                      <Badge variant={booking.equipmentRequestStatus === "approved" ? "default" : booking.equipmentRequestStatus === "denied" ? "destructive" : "secondary"}>
+                        Equipment {booking.equipmentRequestStatus}
+                      </Badge>
+                    )}
                     {renderNeedsBadge(booking)}
                   </div>
                   {booking.purpose && <div className="pl-11">{renderPurposeButton(booking, 'scheduled-mobile')}</div>}
@@ -222,6 +286,7 @@ export function ScheduledBookingsTab(props: ScheduledBookingsTabProps) {
                       </Button>
                     </div>
                   )}
+                  {renderAdminRowActions(booking)}
                 </div>
                 {/* Desktop layout */}
                 <div className="hidden md:flex items-center justify-between gap-6">
@@ -272,6 +337,11 @@ export function ScheduledBookingsTab(props: ScheduledBookingsTabProps) {
                         <span className={`px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap ${booking.status === "pending" ? "bg-blue-100 text-blue-800" : "bg-pink-100 text-pink-800"}`}>
                           {booking.status === "pending" ? "Pending Approval" : "Scheduled"}
                         </span>
+                        {!!booking.equipment && booking.equipmentRequestStatus && (
+                          <Badge variant={booking.equipmentRequestStatus === "approved" ? "default" : booking.equipmentRequestStatus === "denied" ? "destructive" : "secondary"}>
+                            Equipment {booking.equipmentRequestStatus}
+                          </Badge>
+                        )}
                         {renderNeedsBadge(booking)}
                       </div>
                       <div className="flex flex-col gap-2 items-end">
@@ -305,9 +375,12 @@ export function ScheduledBookingsTab(props: ScheduledBookingsTabProps) {
                     )}
                   </div>
                 </div>
+                <div className="mt-3 border-t border-gray-100 pt-3">
+                  {renderAdminRowActions(booking)}
+                </div>
               </div>
             ))}
-          {upcomingBookingsFiltered.length > itemsPerPage && renderPagination(upcomingBookingsFiltered.length, upcomingBookingsPage, setUpcomingBookingsPage)}
+          {upcomingBookingsFiltered.length > itemsPerPage && renderPagination(upcomingBookingsFiltered.length, visibleUpcomingPage, setUpcomingBookingsPage)}
         </div>
       ) : (
         <div className="text-center py-8">

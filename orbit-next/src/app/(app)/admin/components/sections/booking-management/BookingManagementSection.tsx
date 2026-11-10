@@ -139,10 +139,10 @@ export function BookingManagementSection({
 
   const scheduledBadgeTotal = useMemo(() => {
     if (bookingSearchTerm) return upcomingBookingsFiltered.length;
-    const upcomingCount = upcomingBookings.length;
-    const pendingCount = pendingBookings.length;
-    return upcomingCount + pendingCount;
-  }, [bookingSearchTerm, pendingBookings.length, upcomingBookings.length, upcomingBookingsFiltered.length]);
+    return new Set(
+      [...upcomingBookings, ...pendingBookings].map((booking) => String(booking.id)),
+    ).size;
+  }, [bookingSearchTerm, pendingBookings, upcomingBookings, upcomingBookingsFiltered.length]);
 
   if (bookingSearchTerm) {
     const activeCount = activeBookingsFiltered.length;
@@ -523,6 +523,7 @@ export function BookingManagementSection({
               renderEquipmentLine={renderEquipmentLine}
               isAdmin={isAdmin}
               equipmentRequestDecisionMutation={equipmentRequestDecisionMutation}
+              adminBookingActionMutation={adminBookingActionMutation}
               openEquipmentModal={openEquipmentModal}
               getNeedsStatusForBooking={getNeedsStatusForBooking}
               hasEquipmentBeenChecked={hasEquipmentBeenChecked}

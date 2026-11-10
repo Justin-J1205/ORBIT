@@ -59,14 +59,23 @@ export function useEquipmentManagement(
       const res = await apiRequest("POST", `/api/admin/bookings/${bookingId}/equipment-decision`, { status, reason });
       return res.json();
     },
-    onSuccess: async () => {
+    onSuccess: async (_data, variables) => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["/api/admin/bookings"] }),
         queryClient.invalidateQueries({ queryKey: ["/api/bookings"] }),
         queryClient.invalidateQueries({ queryKey: ["/api/notifications"] }),
         queryClient.invalidateQueries({ queryKey: ["/api/admin/activity"] }),
       ]);
-      toast({ title: "Equipment request updated", description: "The requester has been notified." });
+      await Promise.all([
+        queryClient.refetchQueries({ queryKey: ["/api/admin/bookings"] }),
+        queryClient.refetchQueries({ queryKey: ["/api/bookings"] }),
+      ]);
+      toast({
+        title: variables.status === "approved"
+          ? "Equipment request successfully approved."
+          : "Equipment request successfully declined.",
+        description: "The admin booking list has been refreshed.",
+      });
     },
     onError: (error: Error) => {
       toast({ title: "Equipment decision failed", description: error.message, variant: "destructive" });
