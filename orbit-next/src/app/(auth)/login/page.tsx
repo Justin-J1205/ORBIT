@@ -157,7 +157,12 @@ function LoginInner() {
         provider: "google",
         options: {
           // Redirect back to login so session can be properly established before routing
-          redirectTo: `${window.location.origin}/login`,
+          redirectTo:
+            typeof window !== "undefined"
+              ? `${window.location.origin}/login`
+              : process.env.NEXT_PUBLIC_APP_URL
+                ? new URL("/login", process.env.NEXT_PUBLIC_APP_URL).toString()
+                : undefined,
 
           // Force Google to show the account chooser so users can pick which account to use
           queryParams: { prompt: 'select_account' },

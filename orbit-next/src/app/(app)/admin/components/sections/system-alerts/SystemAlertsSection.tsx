@@ -226,6 +226,7 @@ export function SystemAlertsSection({
               bookingAlertsPage={bookingAlertsPage}
               onBookingAlertsPageChange={onBookingAlertsPageChange}
               formatDateTime={formatDateTime}
+              formatAlertMessage={formatAlertMessage}
               safeJsonParse={safeJsonParse}
               onNavigateToBooking={onNavigateToBooking}
               onMarkAlertRead={onMarkAlertRead}

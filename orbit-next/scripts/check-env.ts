@@ -42,6 +42,7 @@ const requiredEnvVars = [
 
 const optionalEnvVars = [
   'NEXT_PUBLIC_API_BASE_URL',
+  'NEXT_PUBLIC_APP_URL',
 ];
 
 console.log('🔍 Checking environment variables...\n');

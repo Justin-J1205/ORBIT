@@ -1,10 +1,12 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useRouter } from "next/navigation";
 import { apiRequest } from "@/lib/api";
 import { useToast } from "@/hooks/ui";
 import type { FacilityBooking } from "@shared/schema";
 
 export function useBookingMutations() {
   const queryClient = useQueryClient();
+  const router = useRouter();
   const { toast } = useToast();
 
   const adminBookingActionMutation = useMutation({
@@ -59,12 +61,13 @@ export function useBookingMutations() {
     },
   });
 
-  const forceActiveBookingMutation = useMutation<any, Error, FacilityBooking>({
-    mutationFn: async (booking: FacilityBooking) => {
+  const forceActiveBookingMutation = useMutation<any, Error, { booking: FacilityBooking; reason: string }>({
+    mutationFn: async ({ booking, reason }) => {
       const now = new Date();
       const endTime = new Date(now.getTime() + 2 * 60 * 60 * 1000);
       const res = await apiRequest("POST", `/api/admin/bookings/${booking.id}/actions`, {
         action: "force_active",
+        reason,
         startTime: now.toISOString(),
         endTime: endTime.toISOString(),
       });
@@ -75,17 +78,19 @@ export function useBookingMutations() {
         queryClient.invalidateQueries({ queryKey: ['/api/admin/bookings'] }),
         queryClient.invalidateQueries({ queryKey: ['/api/bookings/pending'] }),
         queryClient.invalidateQueries({ queryKey: ['/api/bookings/all'] }),
+        queryClient.invalidateQueries({ queryKey: ['/api/bookings'] }),
+        queryClient.invalidateQueries({ queryKey: ['/api/notifications'] }),
         queryClient.invalidateQueries({ queryKey: ['/api/admin/stats'] }),
       ]);
-      setTimeout(async () => {
-        await Promise.all([
-          queryClient.refetchQueries({ queryKey: ['/api/admin/bookings'] }),
-          queryClient.refetchQueries({ queryKey: ['/api/bookings/pending'] }),
-        ]);
-      }, 500);
+      await Promise.all([
+        queryClient.refetchQueries({ queryKey: ['/api/admin/bookings'] }),
+        queryClient.refetchQueries({ queryKey: ['/api/bookings/pending'] }),
+        queryClient.refetchQueries({ queryKey: ['/api/bookings'] }),
+      ]);
+      router.refresh();
       toast({ 
         title: 'Booking Activated', 
-        description: 'Booking has been forced to active status for testing.',
+        description: 'Booking has been force-started and the student has been notified.',
         variant: 'default' 
       });
     },

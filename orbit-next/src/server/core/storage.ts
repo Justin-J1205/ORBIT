@@ -32,14 +32,15 @@ import {
   type UpdateReportSchedule,
 } from "@shared/schema";
 import { db } from "@/server/config";
+import { getDefaultFacilityAllowedRoles } from "@shared/facilityAccess";
+import { getEquipmentRequestDecision, type EquipmentItemDecision } from "@shared/equipmentApproval";
 import { eq, and, desc, asc, gte, lte, count, sql, isNotNull, or, lt, gt, ne } from "drizzle-orm";
 import { z } from "zod";
-import type { PgTransaction } from "drizzle-orm/pg-core";
-import type { NodePgQueryResultHKT } from "drizzle-orm/node-postgres";
+import type { PostgresJsTransaction } from "drizzle-orm/postgres-js";
 import type { ExtractTablesWithRelations } from "drizzle-orm";
 import * as schema from "@shared/schema";
 
-type DbTransaction = PgTransaction<NodePgQueryResultHKT, typeof schema, ExtractTablesWithRelations<typeof schema>>;
+type DbTransaction = PostgresJsTransaction<typeof schema, ExtractTablesWithRelations<typeof schema>>;
 
 export interface IStorage {
   // User operations (mandatory for Replit Auth)
@@ -69,7 +70,7 @@ export interface IStorage {
   // Facility operations
   getAllFacilities(): Promise<Facility[]>;
   getFacility(id: number): Promise<Facility | undefined>;
-  createFacility(facility: { name: string; description?: string; capacity: number; image?: string; campusId?: number }): Promise<Facility>;
+  createFacility(facility: { name: string; description?: string; capacity: number; image?: string; campusId?: number; allowedRoles?: string[] }): Promise<Facility>;
   updateFacility(facilityId: number, updates: Partial<Facility>): Promise<void>;
   deleteFacility(id: number): Promise<void>;
   
@@ -79,6 +80,13 @@ export interface IStorage {
   getFacilityBookingByClientRequestId(clientRequestId: string, userId: string): Promise<FacilityBooking | undefined>;
   updateFacilityBooking(id: string, updates: Partial<FacilityBooking>): Promise<void>;
   updateFacilityBookingWithActivity(id: string, updates: Partial<FacilityBooking>, activity: ActivityLog, expectedStatus?: string): Promise<void>;
+  updateFacilityBookingEquipmentItemDecision(
+    id: string,
+    itemKey: string,
+    status: "approved" | "declined",
+    reason: string,
+    activity: ActivityLog,
+  ): Promise<FacilityBooking>;
   getAllFacilityBookings(): Promise<FacilityBooking[]>; // New function
   
   
@@ -292,8 +300,11 @@ export class DatabaseStorage implements IStorage {
     return facility;
   }
 
-  async createFacility(facility: { name: string; description?: string; capacity: number; image?: string; campusId?: number }): Promise<Facility> {
-    const [newFacility] = await db.insert(facilities).values(facility as any).returning();
+  async createFacility(facility: { name: string; description?: string; capacity: number; image?: string; campusId?: number; allowedRoles?: string[] }): Promise<Facility> {
+    const [newFacility] = await db.insert(facilities).values({
+      ...facility,
+      allowedRoles: facility.allowedRoles ?? getDefaultFacilityAllowedRoles(facility.name),
+    }).returning();
     return newFacility;
   }
 
@@ -505,6 +516,92 @@ export class DatabaseStorage implements IStorage {
         }
       }
       await tx.insert(activityLogs).values(activity);
+    });
+  }
+
+  async updateFacilityBookingEquipmentItemDecision(
+    id: string,
+    itemKey: string,
+    status: "approved" | "declined",
+    reason: string,
+    activity: ActivityLog,
+  ): Promise<FacilityBooking> {
+    return db.transaction(async (tx: DbTransaction) => {
+      const [existing] = await tx
+        .select()
+        .from(facilityBookings)
+        .where(eq(facilityBookings.id, id))
+        .for("update");
+      if (!existing) throw new Error("Booking not found.");
+
+      let equipmentValue = existing.equipment;
+      if (typeof equipmentValue === "string") {
+        try {
+          equipmentValue = JSON.parse(equipmentValue);
+        } catch {
+          throw new Error("The equipment request could not be read.");
+        }
+      }
+      if (!equipmentValue || typeof equipmentValue !== "object" || Array.isArray(equipmentValue)) {
+        throw new Error("This booking has no equipment request.");
+      }
+
+      const equipment = { ...(equipmentValue as Record<string, unknown>) };
+      const requestedItems = Array.isArray(equipment.items)
+        ? equipment.items.map((item) => String(item ?? "").trim()).filter(Boolean)
+        : Object.entries(equipment)
+          .filter(([key, value]) => !["others", "itemStatuses", "itemDeclineReasons"].includes(key)
+            && (value === true || value === "requested" || value === "prepared"))
+          .map(([key]) => key);
+      if (typeof equipment.others === "string" && equipment.others.trim()) {
+        requestedItems.push("others");
+      }
+      if (!requestedItems.includes(itemKey)) {
+        throw new (this.ConflictError)("The requested equipment item is no longer available for review.");
+      }
+
+      const itemStatuses = equipment.itemStatuses && typeof equipment.itemStatuses === "object"
+        ? { ...(equipment.itemStatuses as Record<string, unknown>) }
+        : {};
+      const currentItemStatus = itemStatuses[itemKey]
+        ?? (existing.equipmentRequestStatus === "approved" ? "approved"
+          : existing.equipmentRequestStatus === "denied" || existing.equipmentRequestStatus === "declined" ? "declined"
+            : "pending");
+      if (currentItemStatus !== "pending") {
+        throw new (this.ConflictError)("This equipment item has already been decided.");
+      }
+      itemStatuses[itemKey] = status;
+
+      const itemDeclineReasons = equipment.itemDeclineReasons && typeof equipment.itemDeclineReasons === "object"
+        ? { ...(equipment.itemDeclineReasons as Record<string, unknown>) }
+        : {};
+      if (status === "declined") itemDeclineReasons[itemKey] = reason;
+
+      const statuses = requestedItems.map((key): EquipmentItemDecision => {
+        if (key === itemKey) return status;
+        const itemStatus = itemStatuses[key];
+        return itemStatus === "approved" || itemStatus === "declined" ? itemStatus : "pending";
+      });
+      const equipmentRequestStatus = getEquipmentRequestDecision(statuses);
+
+      equipment.itemStatuses = itemStatuses;
+      equipment.itemDeclineReasons = itemDeclineReasons;
+      await tx.update(facilityBookings)
+        .set({
+          equipment: equipment as FacilityBooking["equipment"],
+          equipmentRequestStatus,
+          equipmentDeclineReason: Object.keys(itemDeclineReasons).length > 0
+            ? reason || existing.equipmentDeclineReason
+            : null,
+          adminId: activity.userId,
+          updatedAt: new Date(),
+        })
+        .where(eq(facilityBookings.id, id));
+      await tx.insert(activityLogs).values(activity);
+
+      const [updated] = await tx.select().from(facilityBookings).where(eq(facilityBookings.id, id));
+      if (!updated) throw new Error("The equipment decision was saved but the booking could not be reloaded.");
+      return updated;
     });
   }
 
@@ -820,7 +917,7 @@ export class DatabaseStorage implements IStorage {
       );
 
     // Return the number of cancelled bookings
-    return result.rowCount || 0;
+    return result.count || 0;
   }
 
   async getPendingFacilityBookings(): Promise<FacilityBooking[]> {
@@ -921,24 +1018,20 @@ export class DatabaseStorage implements IStorage {
 
   async markAlertAsRead(id: string): Promise<number> {
     const result = await db.update(systemAlerts).set({ isRead: true }).where(eq(systemAlerts.id, id));
-    // drizzle returns a result with rowCount in some drivers; fall back to 0 when missing
-    // @ts-ignore
-    return (result && (result as any).rowCount) || 0;
+    return result.count || 0;
   }
 
   // Mark an alert as read only if it belongs to the specified user.
   async markAlertAsReadForUser(id: string, userId: string): Promise<number> {
     const result = await db.update(systemAlerts).set({ isRead: true }).where(and(eq(systemAlerts.id, id), eq(systemAlerts.userId, userId)));
-    // @ts-ignore
-    return (result && (result as any).rowCount) || 0;
+    return result.count || 0;
   }
 
   // Mark a global/admin alert as read (only when userId IS NULL). Intended for admin routes.
   async markAlertAsReadForAdmin(id: string): Promise<number> {
     // Admin can mark any alert as read (both global alerts and user-specific equipment/needs alerts)
     const result = await db.update(systemAlerts).set({ isRead: true }).where(eq(systemAlerts.id, id));
-    // @ts-ignore
-    return (result && (result as any).rowCount) || 0;
+    return result.count || 0;
   }
 
   async updateSystemAlert(id: string, updates: Partial<SystemAlert>): Promise<SystemAlert | null> {

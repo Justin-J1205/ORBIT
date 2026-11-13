@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/api";
+import { getDefaultFacilityAllowedRoles } from "@shared/facilityAccess";
 
 type Facility = {
   id: number;
@@ -51,11 +52,9 @@ function FacilityFormModal({
   const [uploading, setUploading] = React.useState(false);
   const [campusId, setCampusId] = React.useState<number | "">(facility?.campusId ?? (campuses[0]?.id ?? ""));
   const [touched, setTouched] = React.useState(false);
-  // Dropdown: 'faculty' or 'student,faculty'
+  const [allowedRolesCustomized, setAllowedRolesCustomized] = React.useState(false);
   const [allowedRoles, setAllowedRoles] = React.useState<string[]>(
-    facility?.allowedRoles?.length === 1 && facility.allowedRoles[0] === "faculty"
-      ? ["faculty"]
-      : ["student", "faculty"]
+    facility?.allowedRoles ?? getDefaultFacilityAllowedRoles(facility?.name)
   );
 
   React.useEffect(() => {
@@ -64,7 +63,8 @@ function FacilityFormModal({
       setDescription(facility?.description || "");
       setCapacity(facility?.capacity ?? 1);
       setCampusId(facility?.campusId ?? "");
-      setAllowedRoles(facility?.allowedRoles ?? ["student", "faculty"]);
+      setAllowedRoles(facility?.allowedRoles ?? getDefaultFacilityAllowedRoles(facility?.name));
+      setAllowedRolesCustomized(false);
       setTouched(false);
       // Split image field into local or URL
       if (facility?.image) {
@@ -83,13 +83,19 @@ function FacilityFormModal({
     }
   }, [open, facility]);
 
+  React.useEffect(() => {
+    if (open && !facility && !allowedRolesCustomized) {
+      setAllowedRoles(getDefaultFacilityAllowedRoles(name));
+    }
+  }, [name, open, facility, allowedRolesCustomized]);
+
   if (!open) return null;
 
   const valid = name.trim().length > 0 && capacity > 0 && allowedRoles.length > 0 && (localImageName || imageUrl || !imageFile);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-lg p-6 mx-4">
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-lg max-h-[85vh] sm:max-h-[90vh] overflow-y-auto p-6 mx-4">
         <h3 className="text-lg font-semibold text-gray-800 mb-4">{title}</h3>
         <form
           className="space-y-4"
@@ -225,16 +231,15 @@ function FacilityFormModal({
               className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
               value={allowedRoles.join(",")}
               onChange={e => {
-                setAllowedRoles(
-                  e.target.value === "faculty"
-                    ? ["faculty"]
-                    : ["student", "faculty"]
-                );
+                setAllowedRoles(e.target.value.split(","));
+                setAllowedRolesCustomized(true);
               }}
               disabled={loading}
             >
               <option value="faculty">Faculty</option>
               <option value="student,faculty">Student & Faculty</option>
+              <option value="faculty,admin">Faculty & Admin</option>
+              <option value="student,faculty,admin">All roles</option>
             </select>
             {touched && allowedRoles.length === 0 && <p className="text-xs text-red-600 mt-1">Select at least one role.</p>}
           </div>
@@ -287,7 +292,7 @@ function DisableFacilityModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-6 mx-4">
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-md max-h-[85vh] sm:max-h-[90vh] overflow-y-auto p-6 mx-4">
         <h3 className="text-lg font-semibold text-gray-800 mb-2">Disable Facility</h3>
         <p className="text-sm text-gray-600 mb-4">
           Please provide a reason for disabling <span className="font-semibold">{facilityName}</span>. This reason will be shown to users.
@@ -361,7 +366,7 @@ function ViewReasonModal({ open, initialReason, loading, onSave, onClose }: {
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-6 mx-4">
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-md max-h-[85vh] sm:max-h-[90vh] overflow-y-auto p-6 mx-4">
         <h3 className="text-lg font-semibold text-gray-800 mb-2">Facility Disabled Reason</h3>
         <form
           onSubmit={e => {
@@ -573,18 +578,19 @@ export default function FacilityManagementSection() {
           {facilitiesByCampus.map(({ campus, facilities }) => (
             <div key={campus.id} className="border rounded-lg bg-white shadow-sm">
               <div className="px-4 py-2 font-semibold text-gray-700 bg-gray-50 border-b text-sm">{campus.name}</div>
-              <table className="min-w-full text-xs">
-                <thead>
-                  <tr className="bg-white">
-                    <th className="px-3 py-2 text-left font-semibold text-gray-600 uppercase tracking-wide">Name</th>
-                    <th className="px-3 py-2 text-left font-semibold text-gray-600 uppercase tracking-wide">Capacity</th>
-                    <th className="px-3 py-2 text-left font-semibold text-gray-600 uppercase tracking-wide">Image</th>
-                    <th className="px-3 py-2 text-left font-semibold text-gray-600 uppercase tracking-wide">Who can book</th>
-                    <th className="px-3 py-2 text-left font-semibold text-gray-600 uppercase tracking-wide">Status</th>
-                    <th className="px-3 py-2 text-right font-semibold text-gray-600 uppercase tracking-wide">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
+              <div className="overflow-x-auto">
+                <table className="min-w-[760px] w-full text-xs">
+                  <thead>
+                    <tr className="bg-white">
+                      <th className="px-3 py-2 text-left font-semibold text-gray-600 uppercase tracking-wide">Name</th>
+                      <th className="px-3 py-2 text-left font-semibold text-gray-600 uppercase tracking-wide">Capacity</th>
+                      <th className="px-3 py-2 text-left font-semibold text-gray-600 uppercase tracking-wide">Image</th>
+                      <th className="px-3 py-2 text-left font-semibold text-gray-600 uppercase tracking-wide">Who can book</th>
+                      <th className="px-3 py-2 text-left font-semibold text-gray-600 uppercase tracking-wide">Status</th>
+                      <th className="px-3 py-2 text-right font-semibold text-gray-600 uppercase tracking-wide">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
                   {facilities.length === 0 ? (
                     <tr><td colSpan={5} className="text-center text-gray-400 py-4">No facilities</td></tr>
                   ) : facilities.map(facility => (
@@ -601,9 +607,12 @@ export default function FacilityManagementSection() {
                           : "-"}
                       </td>
                       <td className="px-3 py-2 text-gray-500">
-                        {Array.isArray(facility.allowedRoles) && facility.allowedRoles.length === 1 && facility.allowedRoles[0] === "faculty"
-                          ? "Faculty"
-                          : "Student & Faculty"}
+                        {(facility.allowedRoles?.length
+                          ? facility.allowedRoles
+                          : getDefaultFacilityAllowedRoles(facility.name)
+                        )
+                          .map(role => role.charAt(0).toUpperCase() + role.slice(1))
+                          .join(" & ")}
                       </td>
                       <td className="px-3 py-2">
                         <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${facility.isActive ? "bg-green-100 text-green-800" : "bg-yellow-100 text-yellow-800"}`}>
@@ -653,8 +662,9 @@ export default function FacilityManagementSection() {
                       </td>
                     </tr>
                   ))}
-                </tbody>
-              </table>
+                  </tbody>
+                </table>
+              </div>
             </div>
           ))}
         </div>
@@ -663,7 +673,7 @@ export default function FacilityManagementSection() {
       {/* Delete Confirmation Dialog */}
       {deleteId !== null && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded-lg shadow-xl max-w-sm w-full mx-4">
+          <div className="bg-white p-6 rounded-lg shadow-xl max-w-sm w-full max-h-[85vh] sm:max-h-[90vh] overflow-y-auto mx-4">
             <h3 className="text-lg font-semibold text-gray-800 mb-2">Delete Facility</h3>
             <p className="text-sm text-gray-600 mb-5">Are you sure you want to delete this facility? This action cannot be undone. All bookings associated with this facility will be affected.</p>
             <div className="flex gap-3 justify-end">

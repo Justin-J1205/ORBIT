@@ -65,7 +65,58 @@ export function formatAlertMessage(
   resolveUserEmailById?: (id: string) => string | undefined | null
 ): string {
   if (!message) return '';
-  const raw = String(message).trim();
+  let raw = String(message).trim();
+  try {
+    const equipmentMarker = raw.toLowerCase().indexOf('[equipment:');
+    const jsonStart = equipmentMarker === -1 ? -1 : raw.indexOf('{', equipmentMarker);
+    if (jsonStart !== -1) {
+      let depth = 0;
+      let inString = false;
+      let escaped = false;
+      let jsonEnd = -1;
+      for (let i = jsonStart; i < raw.length; i++) {
+        const char = raw[i];
+        if (inString) {
+          if (escaped) escaped = false;
+          else if (char === '\\') escaped = true;
+          else if (char === '"') inString = false;
+          continue;
+        }
+        if (char === '"') inString = true;
+        else if (char === '{') depth++;
+        else if (char === '}' && --depth === 0) {
+          jsonEnd = i + 1;
+          break;
+        }
+      }
+
+      if (jsonEnd !== -1) {
+        const equipmentData = safeJsonParse(raw.slice(jsonStart, jsonEnd));
+        if (equipmentData && typeof equipmentData === 'object' && !Array.isArray(equipmentData)) {
+          const items = Array.isArray(equipmentData.items)
+            ? equipmentData.items
+                .map((item: unknown) => {
+                  const name = typeof item === 'string'
+                    ? item
+                    : item && typeof item === 'object' && 'name' in item && typeof item.name === 'string'
+                      ? item.name
+                      : '';
+                  return name.trim().replace(/_/g, ' ');
+                })
+                .filter(Boolean)
+            : [];
+          const others = typeof equipmentData.others === 'string' ? equipmentData.others.trim() : '';
+          const readableEquipment = [
+            items.length ? `Equipment: ${items.join(', ')}` : '',
+            others ? `Additional notes: ${others}` : '',
+          ].filter(Boolean).join('; ');
+          const markerEnd = raw.indexOf(']', jsonEnd);
+          const end = markerEnd === -1 ? jsonEnd : markerEnd + 1;
+          raw = `${raw.slice(0, equipmentMarker)}${readableEquipment}${raw.slice(end)}`;
+        }
+      }
+    }
+  } catch {}
   try {
     const uuidRegex = /Session ([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/;
     if (uuidRegex.test(raw) || raw.includes('The computer session for this user was automatically logged out due to inactivity')) {

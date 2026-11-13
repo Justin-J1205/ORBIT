@@ -8,7 +8,10 @@ export function useCancelBooking(toast: any) {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: (bookingId: string) => apiRequest("POST", `/api/bookings/${bookingId}/cancel`),
+    mutationFn: (bookingId: string) =>
+      apiRequest("POST", `/api/bookings/${bookingId}/cancel`, {
+        reason: "User cancelled their own booking",
+      }),
     onSuccess: async () => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["/api/bookings"] }),

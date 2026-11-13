@@ -55,8 +55,17 @@ export function useEquipmentManagement(
   });
 
   const equipmentRequestDecisionMutation = useMutation({
-    mutationFn: async ({ bookingId, status, reason }: { bookingId: string; status: "approved" | "denied"; reason?: string }) => {
-      const res = await apiRequest("POST", `/api/admin/bookings/${bookingId}/equipment-decision`, { status, reason });
+    mutationFn: async ({ bookingId, itemKey, status, reason }: {
+      bookingId: string;
+      itemKey: string;
+      status: "approved" | "declined";
+      reason?: string;
+    }): Promise<{ success: boolean; itemStatus: "approved" | "declined"; equipmentRequestStatus: string }> => {
+      const res = await apiRequest("POST", `/api/admin/bookings/${bookingId}/equipment-decision`, {
+        itemKey,
+        status,
+        reason,
+      });
       return res.json();
     },
     onSuccess: async (_data, variables) => {
@@ -71,10 +80,8 @@ export function useEquipmentManagement(
         queryClient.refetchQueries({ queryKey: ["/api/bookings"] }),
       ]);
       toast({
-        title: variables.status === "approved"
-          ? "Equipment request successfully approved."
-          : "Equipment request successfully declined.",
-        description: "The admin booking list has been refreshed.",
+        title: variables.status === "approved" ? "Equipment item approved." : "Equipment item declined.",
+        description: "The equipment approval status has been updated.",
       });
     },
     onError: (error: Error) => {

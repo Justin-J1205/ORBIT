@@ -9,7 +9,7 @@ import { facilityBookings, insertFacilityBookingSchema } from "@shared/schema";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const REASON_REQUIRED_ACTIONS = new Set(["decline", "cancel", "reschedule", "modify"]);
+const REASON_REQUIRED_ACTIONS = new Set(["decline", "cancel", "reschedule", "modify", "force_active"]);
 
 export async function POST(
   request: NextRequest,
@@ -80,19 +80,23 @@ export async function POST(
       notificationTitle = "Booking Cancelled by Admin";
       notificationMessage = `Your booking for ${await getFacilityName(booking.facilityId)} was cancelled by an administrator. Reason: ${reason}`;
     } else if (action === "force_active") {
+      if (!["pending", "approved"].includes(booking.status)) {
+        return NextResponse.json({ message: "Only pending or approved bookings can be force-started." }, { status: 409 });
+      }
       const startTime = payload.startTime === undefined ? now : new Date(String(payload.startTime));
       const endTime = payload.endTime === undefined ? new Date(now.getTime() + 2 * 60 * 60 * 1000) : new Date(String(payload.endTime));
       if (Number.isNaN(startTime.getTime()) || Number.isNaN(endTime.getTime()) || endTime <= startTime) {
-        return NextResponse.json({ message: "Invalid test booking time range." }, { status: 400 });
+        return NextResponse.json({ message: "Invalid booking time range." }, { status: 400 });
       }
       updates.status = "approved";
       updates.startTime = startTime;
       updates.endTime = endTime;
+      updates.forceStartReason = reason;
       updates.arrivalConfirmed = false;
       updates.arrivalConfirmationDeadline = new Date(now.getTime() + 15 * 60 * 1000);
-      actionLabel = "Booking Force Activated (Test)";
+      actionLabel = "Booking Force Started by Admin";
       notificationTitle = actionLabel;
-      notificationMessage = `An administrator activated your booking for ${await getFacilityName(booking.facilityId)} for testing.`;
+      notificationMessage = `An administrator force-started your booking for ${await getFacilityName(booking.facilityId)}. Reason: ${reason}`;
     } else {
       const currentStart = new Date(booking.startTime);
       if (!["pending", "approved"].includes(booking.status) || currentStart <= now) {
@@ -128,7 +132,13 @@ export async function POST(
 
       const facility = await storage.getFacility(facilityId);
       if (!facility) return NextResponse.json({ message: "Facility not found." }, { status: 404 });
-      const eligibility = await ensureFacilityIsBookable(booking.userId, facility, participants, startTime, endTime);
+      const eligibility = await ensureFacilityIsBookable(
+        facility,
+        participants,
+        startTime,
+        endTime,
+        { isAdmin: true },
+      );
       if (!eligibility.ok) return NextResponse.json(eligibility.error.body, { status: eligibility.error.status });
 
       updates.facilityId = facilityId;

@@ -27,7 +27,7 @@ export default function CampusModal({ open, initial, title = "Add Campus", confi
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-30">
-      <div className="bg-white rounded-lg shadow-lg w-full max-w-md p-6 relative animate-fade-in">
+      <div className="bg-white rounded-lg shadow-lg w-full max-w-md max-h-[85vh] sm:max-h-[90vh] overflow-y-auto p-6 relative animate-fade-in">
         <h3 className="text-lg font-semibold mb-4">{title}</h3>
         <form
           className="space-y-4"

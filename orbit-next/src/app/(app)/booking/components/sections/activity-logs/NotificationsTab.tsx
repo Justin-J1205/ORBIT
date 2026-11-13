@@ -2,6 +2,7 @@ import { Dispatch, SetStateAction } from "react";
 import { format } from "date-fns";
 import { Loader2 } from "lucide-react";
 import { SkeletonListItem } from "@/components/ui/skeleton-presets";
+import { getEquipmentItemNames } from "@shared/equipmentFormatting";
 
 interface NotificationsTabProps {
   notificationsData: any[];
@@ -68,7 +69,9 @@ export function NotificationsTab({
           <div
             key={notification.id}
             className={`p-4 rounded-lg border ${
-              notification.readAt ? "border-gray-100 bg-gray-50" : "border-pink-100 bg-pink-50"
+              notification.readAt
+                ? "border-gray-100 bg-gray-50"
+                : "border-pink-100 bg-pink-50"
             } flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3`}
           >
             <div className="flex-1 min-w-0">
@@ -98,11 +101,7 @@ export function NotificationsTab({
                   <span key={idx} className="block">
                     {(() => {
                       const { baseMessage, equipment } = parseEquipmentFromMessage(line);
-                      const equipmentItems = equipment && typeof equipment === "object"
-                        ? Array.isArray(equipment.items)
-                          ? equipment.items
-                          : Object.keys(equipment).filter((key) => key !== "others")
-                        : [];
+                      const equipmentItems = getEquipmentItemNames(equipment);
                       return (
                         <>
                           {baseMessage}

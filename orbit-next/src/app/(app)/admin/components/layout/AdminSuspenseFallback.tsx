@@ -8,7 +8,7 @@ export function AdminSuspenseFallback() {
       <Header onMobileToggle={() => {}} />
       <div className="flex">
         {/* Desktop sidebar skeleton */}
-        <div className="hidden md:block w-64 h-[calc(100vh-4rem)] border-r bg-card fixed top-16 left-0 z-30 overflow-y-auto">
+        <div className="hidden md:block w-64 h-[calc(100vh-4rem)] bg-card fixed top-16 left-0 z-30 overflow-y-auto">
           <div className="p-4 space-y-2">
             {Array.from({ length: 8 }).map((_, i) => (
               <div key={i} className="h-10 bg-gray-200 animate-pulse rounded" />

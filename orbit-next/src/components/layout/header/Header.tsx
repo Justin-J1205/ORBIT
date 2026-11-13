@@ -8,7 +8,13 @@ import { useSidebar } from "@/components/ui/sidebar";
 import { useHeaderLogic } from "./hooks";
 import { HeaderContent } from "./components";
 
-export default function Header({ onMobileToggle }: { onMobileToggle?: () => void }) {
+export default function Header({
+  onMobileToggle,
+  mobileToggleClassName,
+}: {
+  onMobileToggle?: () => void;
+  mobileToggleClassName?: string;
+}) {
   const sidebar = useSidebar();
   const headerData = useHeaderLogic();
 
@@ -33,6 +39,7 @@ export default function Header({ onMobileToggle }: { onMobileToggle?: () => void
         userBookings={headerData.userBookings}
         allFacilities={headerData.allFacilities}
         onMobileToggle={handleMobileToggle}
+        mobileToggleClassName={mobileToggleClassName}
         onMarkAsRead={headerData.markAsRead}
         onLogout={headerData.handleLogout}
       />

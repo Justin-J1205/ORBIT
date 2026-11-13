@@ -108,12 +108,26 @@ export function MyBookingsSection({
   }, []);
 
   const getRenderBookingStatus = useCallback((booking: any) => {
-    if (currentTime !== null) return getBookingStatus(booking);
-    if (booking.status === "approved") return { label: "Scheduled", badgeClass: "bg-yellow-100 text-yellow-800" };
-    if (booking.status === "pending") return { label: "Pending", badgeClass: "bg-blue-100 text-blue-800" };
-    if (booking.status === "denied") return { label: "Denied", badgeClass: "denied" };
-    if (booking.status === "cancelled") return { label: "Cancelled", badgeClass: "cancelled" };
-    return { label: booking.status, badgeClass: booking.status };
+    const status = currentTime !== null
+      ? getBookingStatus(booking)
+      : booking.status === "approved"
+        ? { label: "Scheduled", badgeClass: "bg-yellow-100 text-yellow-800" }
+        : booking.status === "pending"
+          ? { label: "Pending", badgeClass: "bg-blue-100 text-blue-800" }
+          : booking.status === "denied"
+            ? { label: "Denied", badgeClass: "denied" }
+            : booking.status === "cancelled"
+              ? { label: "Cancelled", badgeClass: "cancelled" }
+              : { label: booking.status, badgeClass: booking.status };
+    if (
+      booking.forceStartReason
+      && booking.status === "approved"
+      && new Date(booking.startTime).getTime() <= (currentTime ?? Date.now())
+      && new Date(booking.endTime).getTime() >= (currentTime ?? Date.now())
+    ) {
+      return { label: "Active (Force Started by Admin)", badgeClass: "bg-green-100 text-green-800" };
+    }
+    return status;
   }, [currentTime, getBookingStatus]);
 
   const queryClient = useQueryClient();
@@ -138,7 +152,7 @@ export function MyBookingsSection({
       const status = getRenderBookingStatus(booking);
       // Category filter
       if (categoryFilter === "scheduled") {
-        if (!["Scheduled", "Active", "Pending"].includes(status.label)) return false;
+        if (!["Scheduled", "Active", "Pending", "Active (Force Started by Admin)"].includes(status.label)) return false;
       } else if (categoryFilter === "completed") {
         if (status.label !== "Completed") return false;
       } else if (categoryFilter === "cancelled") {
@@ -182,7 +196,7 @@ export function MyBookingsSection({
         </div>
         <button
           onClick={() => openBookingModal()}
-          className="bg-pink-600 hover:bg-pink-700 text-white px-4 py-2 rounded-lg font-medium transition-colors duration-200 flex items-center gap-2 text-sm sm:text-base self-start sm:self-auto"
+          className="min-h-[44px] bg-pink-600 hover:bg-pink-700 text-white px-4 py-2 rounded-lg font-medium transition-colors duration-200 flex items-center gap-2 text-sm sm:text-base self-start sm:self-auto"
         >
           <Plus className="h-4 w-4" />
           New Booking
@@ -193,32 +207,32 @@ export function MyBookingsSection({
         <select
           value={categoryFilter}
           onChange={(e) => setCategoryFilter(e.target.value as CategoryFilter)}
-          className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:border-pink-600 focus:ring-1 focus:ring-pink-600 focus:outline-none bg-white"
+          className="min-h-[44px] w-full sm:w-auto px-3 py-2 border border-gray-200 rounded-lg text-sm focus:border-pink-600 focus:ring-1 focus:ring-pink-600 focus:outline-none bg-white"
         >
           <option value="all">All Bookings</option>
           <option value="scheduled">Scheduled / Active</option>
           <option value="completed">Completed</option>
           <option value="cancelled">Cancelled / Denied</option>
         </select>
-        <div className="flex items-center gap-2">
+        <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
           <label className="text-xs text-gray-500 whitespace-nowrap">From:</label>
           <input
             type="date"
             value={dateFrom}
             onChange={(e) => setDateFrom(e.target.value)}
-            className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:border-pink-600 focus:ring-1 focus:ring-pink-600 focus:outline-none"
+            className="min-h-[44px] min-w-0 flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:border-pink-600 focus:ring-1 focus:ring-pink-600 focus:outline-none"
           />
           <label className="text-xs text-gray-500 whitespace-nowrap">To:</label>
           <input
             type="date"
             value={dateTo}
             onChange={(e) => setDateTo(e.target.value)}
-            className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:border-pink-600 focus:ring-1 focus:ring-pink-600 focus:outline-none"
+            className="min-h-[44px] min-w-0 flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:border-pink-600 focus:ring-1 focus:ring-pink-600 focus:outline-none"
           />
           {(dateFrom || dateTo) && (
             <button
               onClick={() => { setDateFrom(""); setDateTo(""); }}
-              className="text-xs text-pink-600 hover:text-pink-700 font-medium whitespace-nowrap"
+              className="min-h-[44px] px-2 text-xs text-pink-600 hover:text-pink-700 font-medium whitespace-nowrap"
             >
               Clear
             </button>
@@ -283,8 +297,22 @@ export function MyBookingsSection({
             const id = String(booking.id ?? `booking-${index}`);
             const eq = booking.equipment || {};
             const items = Array.isArray(eq.items) ? eq.items : [];
+            const equipmentItemStatuses = eq.itemStatuses && typeof eq.itemStatuses === "object" ? eq.itemStatuses : {};
             const hasOthers = eq.others && String(eq.others).trim().length > 0;
             const isExpanded = !!expandedCards[id];
+            const itemApprovalStatus = (key: string) => equipmentItemStatuses[key]
+              ?? (booking.equipmentRequestStatus === "approved" ? "approved"
+                : booking.equipmentRequestStatus === "denied" || booking.equipmentRequestStatus === "declined" ? "declined" : "pending");
+            const renderItemStatus = (key: string) => {
+              const status = itemApprovalStatus(key);
+              const label = status === "denied" || status === "declined" ? "Declined"
+                : status === "partially_approved" ? "Partially approved"
+                  : status === "approved" ? "Approved" : "Pending";
+              const color = status === "approved" ? "bg-green-100 text-green-800"
+                : status === "declined" || status === "denied" ? "bg-red-100 text-red-800"
+                  : "bg-blue-100 text-blue-800";
+              return <span className={`rounded-full px-2 py-1 text-[10px] font-medium capitalize ${color}`}>{label}</span>;
+            };
 
             return (
               <div
@@ -301,12 +329,12 @@ export function MyBookingsSection({
                     {/* Left: Facility info */}
                     <div className="flex items-start gap-2 flex-shrink-0">
                       <div className={`${
-                        status.label === "Active" ? "bg-green-100" :
+                        status.label.startsWith("Active") ? "bg-green-100" :
                         status.label === "Scheduled" ? "bg-pink-100" :
                         "bg-gray-100"
                       } p-2 rounded-lg flex-shrink-0`}>
                         <Calendar className={`h-4 w-4 ${
-                          status.label === "Active" ? "text-green-600" :
+                          status.label.startsWith("Active") ? "text-green-600" :
                           status.label === "Scheduled" ? "text-pink-600" :
                           "text-gray-600"
                         }`} />
@@ -339,9 +367,9 @@ export function MyBookingsSection({
                           </div>
                         </div>
                         {/* Status badge + Edit/Cancel buttons */}
-                        <div className="flex items-center gap-3">
-                          <span className={`px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap ${
-                            status.label === "Active" ? "bg-green-100 text-green-800" :
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className={`max-w-full break-words px-3 py-1 rounded-full text-xs font-medium leading-tight text-center ${
+                            status.label.startsWith("Active") ? "bg-green-100 text-green-800" :
                             status.label === "Scheduled" ? "bg-pink-100 text-pink-800" :
                             status.label === "Completed" ? "bg-green-100 text-green-800" :
                             status.label === "Cancelled" ? "bg-orange-100 text-orange-800" :
@@ -361,7 +389,7 @@ export function MyBookingsSection({
                             <button
                               type="button"
                               onClick={(e) => { e.stopPropagation(); onRescheduleBooking(booking); }}
-                              className="px-2.5 py-1 text-pink-700 text-[11px] font-medium rounded-md border border-pink-200 hover:bg-pink-50 transition-colors whitespace-nowrap"
+                              className="min-h-[44px] px-2.5 py-1 text-pink-700 text-[11px] font-medium rounded-md border border-pink-200 hover:bg-pink-50 transition-colors whitespace-nowrap"
                             >
                               Reschedule
                             </button>
@@ -372,14 +400,14 @@ export function MyBookingsSection({
                                 <button
                                   onClick={(e) => { e.stopPropagation(); onCancelBooking(booking); }}
                                   disabled={cancelBookingMutationStatus === "pending"}
-                                  className={`px-2.5 py-1 text-white text-[11px] font-medium rounded-md transition-colors whitespace-nowrap ${
+                                  className={`min-h-[44px] px-2.5 py-1 text-white text-[11px] font-medium rounded-md transition-colors whitespace-nowrap ${
                                     cancelBookingMutationStatus === "pending" ? "bg-red-400 cursor-wait" : "bg-red-600 hover:bg-red-700"
                                   }`}
                                 >
                                   {cancelBookingMutationStatus === "pending" ? (
                                     <Loader2 className="h-3 w-3 animate-spin inline" />
                                   ) : (
-                                    status.label === "Active" ? "End" : "Cancel"
+                                    status.label.startsWith("Active") ? "End" : "Cancel"
                                   )}
                                 </button>
                               )}
@@ -390,7 +418,7 @@ export function MyBookingsSection({
                       </div>
 
                       {/* Countdown for Active bookings */}
-                      {status.label === "Active" && booking.userId === user?.id && (
+                      {status.label.startsWith("Active") && booking.userId === user?.id && (
                         <div className="flex-shrink-0">
                           {booking.arrivalConfirmationDeadline && !booking.arrivalConfirmed ? (
                             <div className="flex items-center gap-2">
@@ -404,7 +432,7 @@ export function MyBookingsSection({
                                   confirmArrivalMutation.mutate(String(booking.id));
                                 }}
                                 disabled={confirmArrivalMutation.isPending}
-                                className="inline-flex items-center gap-1 px-3 py-1.5 bg-green-600 text-white text-xs font-medium rounded-lg hover:bg-green-700 transition-colors disabled:bg-green-400 disabled:cursor-wait"
+                                className="min-h-[44px] inline-flex items-center gap-1 px-3 py-1.5 bg-green-600 text-white text-xs font-medium rounded-lg hover:bg-green-700 transition-colors disabled:bg-green-400 disabled:cursor-wait"
                               >
                                 {confirmArrivalMutation.isPending ? (
                                   <Loader2 className="h-3 w-3 animate-spin" />
@@ -459,11 +487,14 @@ export function MyBookingsSection({
                         {(items.length > 0 || hasOthers) ? (
                           <div className="space-y-1 text-left">
                             {items.map((item: string, idx: number) => (
-                              <div key={`eq-${id}-${idx}`}>
+                              <div key={`eq-${id}-${idx}`} className="flex flex-wrap items-center justify-between gap-2">
                                 <span className="text-xs text-gray-700 font-medium">{item}</span>
+                                {renderItemStatus(item)}
                               </div>
                             ))}
                             {hasOthers && (
+                              <div className="flex flex-wrap items-center justify-between gap-2">
+                              {renderItemStatus("others")}
                               <Popover open={!!openOthers[id]} onOpenChange={(v) => setOpenOthers((prev) => ({ ...prev, [id]: v }))}>
                                 <TooltipProvider>
                                   <Tooltip>
@@ -471,7 +502,7 @@ export function MyBookingsSection({
                                       <PopoverTrigger asChild>
                                         <button
                                           onClick={(e) => { e.stopPropagation(); }}
-                                          className="text-xs text-pink-600 hover:text-pink-700 font-medium"
+                                          className="min-h-[44px] inline-flex items-center text-xs text-pink-600 hover:text-pink-700 font-medium"
                                         >
                                           View other
                                         </button>
@@ -496,6 +527,7 @@ export function MyBookingsSection({
                                   </div>
                                 </PopoverContent>
                               </Popover>
+                              </div>
                             )}
                           </div>
                         ) : (
@@ -510,9 +542,21 @@ export function MyBookingsSection({
                         {booking.rescheduleReason && <p><strong>Last change reason:</strong> {booking.rescheduleReason}</p>}
                         {booking.equipmentRequestStatus && (
                           <p>
-                            <strong>Equipment request:</strong> {booking.equipmentRequestStatus}
+                            <strong>Equipment request:</strong> {booking.equipmentRequestStatus === "denied" || booking.equipmentRequestStatus === "declined"
+                              ? "Declined"
+                              : booking.equipmentRequestStatus === "partially_approved"
+                                ? "Partially approved"
+                                : booking.equipmentRequestStatus === "approved"
+                                  ? "Approved"
+                                  : "Pending"}
                             {booking.equipmentDeclineReason ? ` - ${booking.equipmentDeclineReason}` : ""}
                           </p>
+                        )}
+                        {booking.forceStartReason && (
+                          <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950">
+                            <strong>⚡ Force Started by Admin:</strong>{" "}
+                            <span className="whitespace-pre-wrap break-words">&quot;{booking.forceStartReason}&quot;</span>
+                          </div>
                         )}
                       </div>
                     )}

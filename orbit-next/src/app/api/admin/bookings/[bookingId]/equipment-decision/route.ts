@@ -22,55 +22,73 @@ export async function POST(
     }
 
     const payload = body as Record<string, unknown>;
-    const status = payload.status;
+    const status = payload.status === "denied" ? "declined" : payload.status;
+    const itemKey = typeof payload.itemKey === "string" ? payload.itemKey.trim() : "";
     const reason = typeof payload.reason === "string" ? payload.reason.trim() : "";
-    if (status !== "approved" && status !== "denied") {
-      return NextResponse.json({ message: "Equipment status must be approved or denied." }, { status: 400 });
+    if (status !== "approved" && status !== "declined") {
+      return NextResponse.json({ message: "Equipment status must be approved or declined." }, { status: 400 });
     }
-    if (status === "denied" && (reason.length < 5 || reason.length > 1000)) {
+    if (itemKey.length > 200) {
+      return NextResponse.json({ message: "Equipment item key is too long." }, { status: 400 });
+    }
+    if (status === "declined" && (reason.length < 5 || reason.length > 1000)) {
       return NextResponse.json({ message: "Enter a decline reason between 5 and 1000 characters." }, { status: 400 });
     }
 
     const booking = await storage.getFacilityBooking(bookingId);
     if (!booking) return NextResponse.json({ message: "Booking not found." }, { status: 404 });
     if (!booking.equipment) return NextResponse.json({ message: "This booking has no equipment request." }, { status: 400 });
-    if (booking.equipmentRequestStatus !== "pending") {
+    if (!itemKey && booking.equipmentRequestStatus !== "pending") {
       return NextResponse.json({ message: "This equipment request has already been decided." }, { status: 409 });
     }
 
     const facility = await storage.getFacility(booking.facilityId);
     const facilityName = facility?.name ?? `Facility ${booking.facilityId}`;
-    const action = status === "approved" ? "Equipment Request Approved" : "Equipment Request Declined";
-    const details = `${action}: booking ${bookingId}, requester ${booking.userId}, program ${booking.program ?? "Not recorded"}; reason: ${reason || "approved by administrator"}.`;
-    await storage.updateFacilityBookingWithActivity(
-      bookingId,
-      {
-        equipmentRequestStatus: status,
-        equipmentDeclineReason: status === "denied" ? reason : null,
-        adminId: authResult.user.id,
-        updatedAt: new Date(),
-      },
-      {
-        id: randomUUID(),
-        userId: authResult.user.id,
-        action,
-        details,
-        ipAddress: request.headers.get("x-forwarded-for"),
-        userAgent: request.headers.get("user-agent"),
-        createdAt: new Date(),
-      },
-      "pending",
-    );
+    const action = itemKey
+      ? `Equipment Item ${status === "approved" ? "Approved" : "Declined"}`
+      : `Equipment Request ${status === "approved" ? "Approved" : "Declined"}`;
+    const details = `${action}: booking ${bookingId}${itemKey ? `, item ${itemKey}` : ""}, requester ${booking.userId}, program ${booking.program ?? "Not recorded"}; reason: ${reason || "approved by administrator"}.`;
+    const activity = {
+      id: randomUUID(),
+      userId: authResult.user.id,
+      action,
+      details,
+      ipAddress: request.headers.get("x-forwarded-for"),
+      userAgent: request.headers.get("user-agent"),
+      createdAt: new Date(),
+    };
+
+    let updatedEquipmentStatus = status;
+    if (itemKey) {
+      const updatedBooking = await storage.updateFacilityBookingEquipmentItemDecision(
+        bookingId,
+        itemKey,
+        status,
+        reason,
+        activity,
+      );
+      updatedEquipmentStatus = updatedBooking.equipmentRequestStatus ?? "pending";
+    } else {
+      await storage.updateFacilityBookingWithActivity(
+        bookingId,
+        {
+          equipmentRequestStatus: status,
+          equipmentDeclineReason: status === "declined" ? reason : null,
+          adminId: authResult.user.id,
+          updatedAt: new Date(),
+        },
+        activity,
+        booking.status,
+      );
+    }
 
     try {
       await storage.createSystemAlert({
         id: randomUUID(),
         type: "user",
-        severity: status === "denied" ? "medium" : "low",
+        severity: status === "declined" ? "medium" : "low",
         title: action,
-        message: status === "approved"
-          ? `Your equipment request for ${facilityName} has been approved.`
-          : `Your equipment request for ${facilityName} was declined. Reason: ${reason}`,
+        message: `${itemKey ? `The ${itemKey} item in` : "Your"} equipment request for ${facilityName} was ${status}.${reason ? ` Reason: ${reason}` : ""}`,
         userId: booking.userId,
         isRead: false,
         createdAt: new Date(),
@@ -80,7 +98,10 @@ export async function POST(
       console.error("[admin/bookings/equipment-decision] Decision saved but requester notification failed:", notificationError);
     }
 
-    return NextResponse.json({ success: true }, { status: 200 });
+    return NextResponse.json({
+      success: true,
+      ...(itemKey ? { itemStatus: status, equipmentRequestStatus: updatedEquipmentStatus } : {}),
+    }, { status: 200 });
   } catch (error) {
     if (error instanceof Error && error.name === "ConflictError") {
       return NextResponse.json({ message: error.message }, { status: 409 });

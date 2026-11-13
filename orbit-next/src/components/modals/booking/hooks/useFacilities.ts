@@ -8,6 +8,7 @@ import { useMemo, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/api';
 import type { Facility } from '@shared/schema';
+import { isFacilityAllowedForRole } from '@shared/facilityAccess';
 import { getPredefinedFacilities } from '../utils';
 
 /**
@@ -26,24 +27,9 @@ export function useFacilities(
 
   // Filter facilities based on user role
   const visibleFacilities = useMemo(() => {
-    return allFacilities.filter((facility: any) => {
-      if (!facility.isActive) return false;
-      
-      const name = String(facility.name || '').toLowerCase();
-      const restricted = /board room|boardroom|lounge/.test(name);
-      const role = userRole || 'student';
-      
-      // Admin sees everything
-      if (role === 'admin') return true;
-      
-      // Faculty sees ONLY Board Room and Faculty Lounge
-      if (role === 'faculty') {
-        return restricted;
-      }
-      
-      // Students see only non-restricted facilities
-      return !restricted;
-    });
+    return allFacilities.filter(
+      (facility) => facility.isActive && isFacilityAllowedForRole(facility, userRole || "student"),
+    );
   }, [allFacilities, userRole]);
 
   return {

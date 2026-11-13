@@ -13,6 +13,7 @@ import {
   ensureFacilityIsBookable,
   setArrivalConfirmationDeadline,
 } from "@/server/bookings/helpers";
+import { getManilaDayBounds } from "@/server/bookings/manilaTime";
 import { db } from "@/server/config";
 import { facilityBookings, insertFacilityBookingSchema } from "@shared/schema";
 import { eq } from "drizzle-orm";
@@ -146,11 +147,11 @@ export async function PUT(
     }
     const facility = facilityResult.value;
     const facilityEligibility = await ensureFacilityIsBookable(
-      bookingOwnerId,
       facility,
       parsedParticipants,
       parsedStartTime,
       parsedEndTime,
+      { isAdmin, userRole: authResult.userRecord?.role },
     );
     if (!facilityEligibility.ok) {
       return NextResponse.json(facilityEligibility.error.body, { status: facilityEligibility.error.status });
@@ -175,10 +176,7 @@ export async function PUT(
         // Max 2 bookings per day for collaborative learning rooms
         // TEMPORARILY DISABLED FOR TESTING
         /*
-        const startOfDay = new Date(parsedStartTime);
-        startOfDay.setHours(0, 0, 0, 0);
-        const endOfDay = new Date(parsedStartTime);
-        endOfDay.setHours(23, 59, 59, 999);
+        const { start: startOfDay, end: endOfDay } = getManilaDayBounds(parsedStartTime);
         
         const allUserBookings = await storage.getFacilityBookingsByUser(bookingOwnerId);
         const existingBookingsToday = allUserBookings.filter((b: any) => {
@@ -251,10 +249,7 @@ export async function PUT(
     }
 
     if (!isAdmin) {
-      const dayStart = new Date(parsedStartTime);
-      dayStart.setHours(0, 0, 0, 0);
-      const dayEnd = new Date(parsedStartTime);
-      dayEnd.setHours(23, 59, 59, 999);
+      const { start: dayStart, end: dayEnd } = getManilaDayBounds(parsedStartTime);
       const bookingsToday = (await storage.getFacilityBookingsByUser(bookingOwnerId)).filter((booking: any) => {
         if (String(booking.id) === String(bookingId) || !["approved", "pending"].includes(booking.status)) return false;
         const bookingStart = new Date(booking.startTime);

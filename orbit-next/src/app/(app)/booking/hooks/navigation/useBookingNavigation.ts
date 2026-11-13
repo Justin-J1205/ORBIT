@@ -3,6 +3,7 @@ import { useLegacyLocation } from "@/lib/utils";
 import { DEFAULT_BOOKING_LEAD_TIME, DEFAULT_BOOKING_DURATION } from '../../config/constants';
 import { apiRequest } from "@/lib/api";
 import { pickAvailableSlot, findEarliestAvailableSlot, findSmartBookingSlot } from '../../lib/helpers/availabilityHelpers';
+import { isFacilityAllowedForRole } from "@shared/facilityAccess";
 
 /**
  * Hook for handling initial URL hash
@@ -291,23 +292,14 @@ export function createOpenBookingModal(
   setShowBookingModal: (value: boolean) => void
 ) {
   return async (facilityId?: number, start?: Date, end?: Date) => {
-    // Check for restricted facilities
-    try {
-      const facility = facilityId ? facilities.find((f) => f.id === facilityId) : undefined;
-      const name = facility?.name || '';
-      const isRestricted = /board room|boardroom|lounge/i.test(name);
-      const userRole = user?.role || 'student';
-      const isFacultyOrAdmin = userRole === 'faculty' || userRole === 'admin';
-      if (isRestricted && !isFacultyOrAdmin) {
-        toast({ 
-          title: 'Access Restricted', 
-          description: 'Only faculty members may book this facility. Contact an administrator for access.', 
-          variant: 'destructive' 
-        });
-        return;
-      }
-    } catch (e) {
-      // ignore and continue
+    const facility = facilityId ? facilities.find((f) => f.id === facilityId) : undefined;
+    if (facility && !isFacilityAllowedForRole(facility, user?.role || "student")) {
+      toast({
+        title: "Access Restricted",
+        description: "Your account does not have permission to book this facility.",
+        variant: "destructive",
+      });
+      return;
     }
     
     setSelectedFacilityForBooking(facilityId || null);

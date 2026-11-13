@@ -76,7 +76,7 @@ export function BookingModalContent({
   );
 
   // Form setup
-  const bookingSchema = createBookingSchema();
+  const bookingSchema = createBookingSchema(isAdmin);
   type BookingFormData = z.infer<typeof bookingSchema>;
 
   const initialBookingState = useMemo(() => deriveInitialBookingState(bookingToEdit), [bookingToEdit]);
@@ -166,6 +166,7 @@ export function BookingModalContent({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [lastSubmissionTime, setLastSubmissionTime] = useState(0);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const [successInfo, setSuccessInfo] = useState<{
     facilityName: string;
     campusName?: string;
@@ -173,6 +174,20 @@ export function BookingModalContent({
     endTime: Date;
     offlineQueued?: boolean;
   } | null>(null);
+
+  useEffect(() => {
+    const subscription = form.watch(() => setSubmitError(null));
+    return () => subscription.unsubscribe();
+  }, [form]);
+
+  const updateEquipmentState = (state: typeof equipmentState) => {
+    setSubmitError(null);
+    setEquipmentState(state);
+  };
+  const updateEquipmentOtherText = (text: string) => {
+    setSubmitError(null);
+    setEquipmentOtherText(text);
+  };
 
   const createBookingMutation = useMutation({
     mutationFn: async (data: BookingFormData) => {
@@ -250,23 +265,52 @@ export function BookingModalContent({
         });
       }
     },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
       setIsSubmitting(false);
       setIsProcessing(false);
 
-      const rawMessage = typeof error?.message === 'string' ? error.message : '';
+      const errorRecord = error && typeof error === 'object'
+        ? error as { message?: unknown; payload?: unknown }
+        : {};
+      const rawMessage = typeof errorRecord.message === 'string' ? errorRecord.message : '';
       const parsedMessage = rawMessage.replace(/^\d{3}:\s*/, '').trim();
-      const details = error?.payload || {};
+      const details = errorRecord.payload && typeof errorRecord.payload === 'object'
+        ? errorRecord.payload as { message?: unknown; error?: unknown; issues?: unknown }
+        : {};
+      const issueMessages = Array.isArray(details.issues)
+        ? details.issues.reduce<string[]>((messages, issue) => {
+            if (!issue || typeof issue !== 'object') return messages;
+
+            const validationIssue = issue as { message?: unknown; path?: unknown };
+            if (typeof validationIssue.message !== 'string' || !validationIssue.message.trim()) {
+              return messages;
+            }
+
+            const field = Array.isArray(validationIssue.path)
+              ? validationIssue.path
+                  .filter((part): part is string | number => typeof part === 'string' || typeof part === 'number')
+                  .join('.')
+              : '';
+            messages.push(field ? `${field}: ${validationIssue.message}` : validationIssue.message);
+            return messages;
+          }, [])
+        : [];
       const conflictHint =
         details?.error === 'UserHasOverlappingBooking' || details?.error === 'UserHasActiveBooking'
           ? ' You still have an overlapping or active booking. Please adjust the time slot or cancel the existing booking first.'
           : '';
       const description =
-        details?.message || parsedMessage || 'Failed to create booking. Please try again.';
-      
+        issueMessages.length > 0
+          ? issueMessages.join(' • ')
+          : (typeof details.message === 'string' ? details.message : '') ||
+            parsedMessage ||
+            'Failed to create booking. Please try again.';
+      const visibleError = `${description}${conflictHint}`;
+      setSubmitError(visibleError);
+
       toast({
         title: "Booking Error",
-        description: `${description}${conflictHint}`,
+        description: visibleError,
         variant: "destructive",
       });
     },
@@ -328,6 +372,7 @@ export function BookingModalContent({
   }, [userId]);
 
   const onSubmit = (data: BookingFormData) => {
+    setSubmitError(null);
     const now = Date.now();
     if (isSubmitting || (now - lastSubmissionTime < 2000)) return;
 
@@ -349,55 +394,60 @@ export function BookingModalContent({
   return (
     <>
 
-      {/* Booking Form Dialog (only show if not processing or success) */}
-      {isOpen && !isProcessing && !successInfo && (
-        <Dialog open={isOpen} onOpenChange={handleClose}>
-          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-            <DialogTitle className="sr-only">Create Booking</DialogTitle>
-            <DialogDescription className="sr-only">Fill in the form to book a facility.</DialogDescription>
-            <BookingForm
-              form={form}
-              facilities={facilities}
-              equipmentState={equipmentState}
-              setEquipmentState={setEquipmentState}
-              equipmentOtherText={equipmentOtherText}
-              setEquipmentOtherText={setEquipmentOtherText}
-              onSubmit={onSubmit}
-              onClose={onClose}
-              isSubmitting={isSubmitting}
-              validationWarnings={formValidationWarnings}
-              slotManagement={slotManagement}
-              selectedFacility={selectedFacility}
-              isAdmin={isAdmin}
-              isEditing={!!bookingToEdit}
-            />
-          </DialogContent>
+      {/* Keep one dialog mounted during submission so failures return to the open form. */}
+      {isOpen && !successInfo && (
+        <Dialog
+          open={isOpen}
+          onOpenChange={(open) => {
+            if (!open && !isProcessing) handleClose();
+          }}
+        >
+          {isProcessing ? (
+            <DialogContent
+              className="max-w-xs text-center px-8 py-10 [&>button]:hidden"
+              onInteractOutside={(e) => e.preventDefault()}
+              onEscapeKeyDown={(e) => e.preventDefault()}
+            >
+              <DialogTitle className="sr-only">Processing Booking</DialogTitle>
+              <DialogDescription className="sr-only">Please wait while your booking is being submitted.</DialogDescription>
+              <div className="flex flex-col items-center gap-4">
+                <div className="w-16 h-16 rounded-full bg-blue-50 flex items-center justify-center">
+                  <svg className="w-8 h-8 text-blue-500 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+                  </svg>
+                </div>
+                <div>
+                  <p className="text-base font-semibold text-gray-800">Processing your booking...</p>
+                  <p className="text-xs text-gray-400 mt-1">Please wait a moment.</p>
+                </div>
+              </div>
+            </DialogContent>
+          ) : (
+            <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+              <DialogTitle className="sr-only">Create Booking</DialogTitle>
+              <DialogDescription className="sr-only">Fill in the form to book a facility.</DialogDescription>
+              <BookingForm
+                form={form}
+                facilities={facilities}
+                equipmentState={equipmentState}
+                setEquipmentState={updateEquipmentState}
+                equipmentOtherText={equipmentOtherText}
+                setEquipmentOtherText={updateEquipmentOtherText}
+                onSubmit={onSubmit}
+                onClose={onClose}
+                isSubmitting={isSubmitting}
+                submitError={submitError}
+                validationWarnings={formValidationWarnings}
+                slotManagement={slotManagement}
+                selectedFacility={selectedFacility}
+                isAdmin={isAdmin}
+                isEditing={!!bookingToEdit}
+              />
+            </DialogContent>
+          )}
         </Dialog>
       )}
-
-      {/* Processing / Loading Dialog */}
-      <Dialog open={isProcessing} onOpenChange={() => {}}>
-        <DialogContent
-          className="max-w-xs text-center px-8 py-10 [&>button]:hidden"
-          onInteractOutside={(e) => e.preventDefault()}
-          onEscapeKeyDown={(e) => e.preventDefault()}
-        >
-          <DialogTitle className="sr-only">Processing Booking</DialogTitle>
-          <DialogDescription className="sr-only">Please wait while your booking is being submitted.</DialogDescription>
-          <div className="flex flex-col items-center gap-4">
-            <div className="w-16 h-16 rounded-full bg-blue-50 flex items-center justify-center">
-              <svg className="w-8 h-8 text-blue-500 animate-spin" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
-              </svg>
-            </div>
-            <div>
-              <p className="text-base font-semibold text-gray-800">Processing your booking...</p>
-              <p className="text-xs text-gray-400 mt-1">Please wait a moment.</p>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
 
       {/* Success Dialog */}
       <Dialog open={!!successInfo} onOpenChange={(open) => { if (!open) { setSuccessInfo(null); handleClose(); } }}>

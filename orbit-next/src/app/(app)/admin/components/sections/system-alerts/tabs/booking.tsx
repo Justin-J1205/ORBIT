@@ -18,6 +18,7 @@ export type BookingTabProps = {
   bookingAlertsPage: number;
   onBookingAlertsPageChange: Setter<number>;
   formatDateTime: (value: any) => string;
+  formatAlertMessage: (message: string | null) => string;
   safeJsonParse: (input: unknown) => any;
   onNavigateToBooking: (bookingId: string | null) => void;
   onMarkAlertRead: (alert: SystemAlert) => void;
@@ -31,6 +32,7 @@ export function BookingTab({
   bookingAlertsPage,
   onBookingAlertsPageChange,
   formatDateTime,
+  formatAlertMessage,
   safeJsonParse,
   onNavigateToBooking,
   onMarkAlertRead,
@@ -412,7 +414,7 @@ export function BookingTab({
               <div>
                 <h3 className="font-semibold text-sm text-muted-foreground mb-2">Message</h3>
                 <p className="text-base leading-relaxed whitespace-pre-wrap break-words">
-                  {selectedAlert.message}
+                  {formatAlertMessage(String(selectedAlert.message || ''))}
                 </p>
               </div>
 

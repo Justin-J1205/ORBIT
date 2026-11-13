@@ -115,8 +115,8 @@ export function ScheduleReportModal({ isOpen, onClose, scheduleToEdit }: Schedul
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl flex flex-col max-h-[90vh]" style={{ overflow: 'hidden' }}>
-        <div className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between flex-shrink-0">
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl flex flex-col max-h-[85vh] sm:max-h-[90vh] overflow-y-auto">
+        <div className="sticky top-0 z-10 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between flex-shrink-0">
           <h2 className="text-xl font-semibold text-gray-900">
             {scheduleToEdit ? "Edit Report Schedule" : "Create Report Schedule"}
           </h2>
@@ -129,7 +129,7 @@ export function ScheduleReportModal({ isOpen, onClose, scheduleToEdit }: Schedul
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} id="schedule-form" className="p-6 space-y-6 flex-1" style={{ overflow: 'auto' }}>
+        <form onSubmit={handleSubmit} id="schedule-form" className="p-6 space-y-6 flex-1">
           <div className="space-y-2">
             <Label htmlFor="reportType">Report Type *</Label>
             <Select value={reportType} onValueChange={setReportType} required>

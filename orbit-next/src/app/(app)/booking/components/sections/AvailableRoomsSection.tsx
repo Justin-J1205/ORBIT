@@ -3,6 +3,7 @@ import { format } from "date-fns";
 import { Calendar } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/api";
+import { isFacilityAllowedForRole } from "@shared/facilityAccess";
 
 import { SkeletonFacilityCard } from "@/components/ui/skeleton-presets";
 
@@ -71,7 +72,6 @@ export function AvailableRoomsSection({
   getFacilityDescriptionByName,
   getFacilityImageByName,
   formatFacilityName,
-  isRestrictedFacility,
   isLibraryClosedNow,
   devForceOpen,
   setDevForceOpen,
@@ -105,15 +105,7 @@ export function AvailableRoomsSection({
 
   const roleFilteredFacilities = useMemo(() => {
     const userRole = user?.role || "student";
-    return facilities.filter((facility) => {
-      if (userRole === "admin") return true;
-      // allowedRoles: string[]
-      if (Array.isArray(facility.allowedRoles)) {
-        return facility.allowedRoles.includes(userRole);
-      }
-      // fallback: show to all
-      return true;
-    });
+    return facilities.filter((facility) => isFacilityAllowedForRole(facility, userRole));
   }, [facilities, user?.role]);
 
   const filteredFacilities = useMemo(() => {
@@ -137,14 +129,12 @@ export function AvailableRoomsSection({
   // Removed effect that auto-switches campus if none available, so user can see empty state
 
   const handleOpenBooking = (facility: any, start?: Date, end?: Date) => {
-    const restricted = isRestrictedFacility(facility);
     const userRole = user?.role || "student";
-    const allowed = userRole === "faculty" || userRole === "admin";
 
-    if (restricted && !allowed) {
+    if (!isFacilityAllowedForRole(facility, userRole)) {
       toast({
         title: "Access Restricted",
-        description: "Only faculty members may book this facility. Contact an administrator for access.",
+        description: "Your account does not have permission to book this facility.",
         variant: "destructive",
       });
       return;

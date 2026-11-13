@@ -5,11 +5,16 @@ import { and, asc, eq, gt, or } from "drizzle-orm";
 import { storage } from "@/server/core";
 import { emailService } from "@/server/emailService";
 import { db } from "@/server/config";
-import { BOOKING_MAX_DURATION_MS, BOOKING_MIN_DURATION_MS } from "@shared/bookingRules";
+import {
+  BOOKING_MIN_DURATION_MS,
+  exceedsBookingDurationLimit,
+} from "@shared/bookingRules";
+import { isFacilityAllowedForRole } from "@shared/facilityAccess";
 import { facilityBookings, type Facility, type FacilityBooking } from "@shared/schema";
-
-const LIBRARY_OPEN_MINUTES = 7 * 60 + 30; // 7:30 AM
-const LIBRARY_CLOSE_MINUTES = 19 * 60; // 7:00 PM
+import {
+  isSameManilaDay,
+  isWithinManilaLibraryHours,
+} from "./manilaTime";
 
 export interface ValidationError {
   status: number;
@@ -19,10 +24,7 @@ export interface ValidationError {
 export type ValidationResult<T = void> = { ok: true; value: T } | { ok: false; error: ValidationError };
 
 export function isWithinLibraryHours(date: Date): boolean {
-  const hours = date.getHours();
-  const minutes = date.getMinutes();
-  const totalMinutes = hours * 60 + minutes;
-  return totalMinutes >= LIBRARY_OPEN_MINUTES && totalMinutes <= LIBRARY_CLOSE_MINUTES;
+  return isWithinManilaLibraryHours(date);
 }
 
 export function formatLibraryHours(): string {
@@ -54,11 +56,7 @@ export function validateLibraryHours(start: Date, end: Date): ValidationResult {
 }
 
 export function validateSameDay(start: Date, end: Date): ValidationResult {
-  if (
-    start.getFullYear() !== end.getFullYear() ||
-    start.getMonth() !== end.getMonth() ||
-    start.getDate() !== end.getDate()
-  ) {
+  if (!isSameManilaDay(start, end)) {
     return {
       ok: false,
       error: {
@@ -86,11 +84,11 @@ export async function getFacilityOrError(facilityId: number): Promise<Validation
 }
 
 export async function ensureFacilityIsBookable(
-  userId: string,
   facility: Facility,
   participants: number,
   start: Date,
   end: Date,
+  options: { isAdmin?: boolean; userRole?: string | null } = {},
 ): Promise<ValidationResult<{ isFacultyOrAdmin: boolean }>> {
   if (!facility.isActive) {
     return {
@@ -101,6 +99,18 @@ export async function ensureFacilityIsBookable(
       },
     };
   }
+
+  const userRole = options.isAdmin ? "admin" : options.userRole;
+  if (!userRole || !isFacilityAllowedForRole(facility, userRole)) {
+    return {
+      ok: false,
+      error: {
+        status: 403,
+        body: { message: "Your account does not have permission to book this facility." },
+      },
+    };
+  }
+  const isFacultyOrAdmin = userRole === "faculty" || userRole === "admin";
 
   if (participants > facility.capacity) {
     return {
@@ -130,34 +140,12 @@ export async function ensureFacilityIsBookable(
     };
   }
 
-  let isFacultyOrAdmin = false;
-  try {
-    const user = await storage.getUser(userId);
-    isFacultyOrAdmin = !!user && (user.role === "faculty" || user.role === "admin");
-  } catch (error) {
-    console.warn("[bookings] Failed to determine user role", error);
-  }
-
-  if (durationMs > BOOKING_MAX_DURATION_MS) {
+  if (exceedsBookingDurationLimit(durationMs, options.isAdmin)) {
     return {
       ok: false,
       error: {
         status: 400,
         body: { message: "Bookings exceeding the maximum allowed duration are not permitted." },
-      },
-    };
-  }
-
-  const facilityName = String(facility.name || "").toLowerCase();
-  const restrictedByName = facilityName.includes("board room") || facilityName.includes("lounge");
-  if (restrictedByName && !isFacultyOrAdmin) {
-    return {
-      ok: false,
-      error: {
-        status: 403,
-        body: {
-          message: "This facility is restricted to faculty members. Please contact an administrator if you require access.",
-        },
       },
     };
   }

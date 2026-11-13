@@ -18,6 +18,7 @@ interface HeaderContentProps {
   userBookings: any[];
   allFacilities: any[];
   onMobileToggle?: () => void;
+  mobileToggleClassName?: string;
   onMarkAsRead: (alertId: string) => Promise<void>;
   onLogout: () => void;
 }
@@ -31,6 +32,7 @@ export function HeaderContent({
   userBookings,
   allFacilities,
   onMobileToggle,
+  mobileToggleClassName = "sm:hidden",
   onMarkAsRead,
   onLogout,
 }: HeaderContentProps) {
@@ -69,14 +71,14 @@ export function HeaderContent({
   };
 
   return (
-    <div className="w-full px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
+    <div className="w-full px-3 sm:px-6 h-16 flex items-center justify-between gap-2 sm:gap-4">
       {/* Logo and branding */}
       <div className="flex items-center gap-3 min-w-0">
         <button
           aria-label="Toggle sidebar"
           title="Toggle sidebar"
           onClick={onMobileToggle}
-          className="p-2 rounded-md text-gray-700 hover:bg-gray-100 sm:hidden"
+          className={`p-2 rounded-md text-gray-700 hover:bg-gray-100 ${mobileToggleClassName}`}
         >
           <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M3 6h18" />
@@ -95,7 +97,7 @@ export function HeaderContent({
       </div>
 
       {/* Actions */}
-      <div className="flex items-center gap-3">
+      <div className="flex shrink-0 items-center gap-1 sm:gap-3">
         {user && (
           <>
             <NotificationDropdown

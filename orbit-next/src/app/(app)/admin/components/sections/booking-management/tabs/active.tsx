@@ -6,6 +6,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Textarea } from '@/components/ui/textarea';
+import { EquipmentApprovalPanel } from "../EquipmentApprovalPanel";
+import { getEquipmentRequestStatusLabel } from "@admin/lib/equipment";
 
 export const BOOKING_MANAGEMENT_TAB_ACTIVE = 'active' as const;
 
@@ -33,7 +35,12 @@ export type ActiveBookingsTabProps = {
   CountdownComponent: React.ComponentType<{ expiry: string | Date | undefined; onExpire?: () => void }>;
   renderPagination: (totalItems: number, page: number, setPage: React.Dispatch<React.SetStateAction<number>>) => React.ReactNode;
   equipmentRequestDecisionMutation: {
-    mutateAsync: (input: { bookingId: string; status: "approved" | "denied"; reason?: string }) => Promise<unknown>;
+    mutateAsync: (input: {
+      bookingId: string;
+      itemKey: string;
+      status: "approved" | "declined";
+      reason?: string;
+    }) => Promise<{ success: boolean; itemStatus: "approved" | "declined"; equipmentRequestStatus: string }>;
     isPending: boolean;
   };
   adminBookingActionMutation: {
@@ -72,15 +79,11 @@ export function ActiveBookingsTab(props: ActiveBookingsTabProps) {
 
   const [selectedBooking, setSelectedBooking] = useState<FacilityBooking | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [equipmentDecisionReason, setEquipmentDecisionReason] = useState("");
-  const [equipmentDecisionError, setEquipmentDecisionError] = useState("");
   const [adminActionReason, setAdminActionReason] = useState("");
   const [adminActionError, setAdminActionError] = useState("");
 
   const handleBookingClick = (booking: FacilityBooking) => {
     setSelectedBooking(booking);
-    setEquipmentDecisionReason("");
-    setEquipmentDecisionError("");
     setAdminActionReason("");
     setAdminActionError("");
     setIsModalOpen(true);
@@ -89,25 +92,6 @@ export function ActiveBookingsTab(props: ActiveBookingsTabProps) {
   const closeModal = () => {
     setIsModalOpen(false);
     setSelectedBooking(null);
-  };
-
-  const runEquipmentDecision = async (status: "approved" | "denied") => {
-    if (!selectedBooking) return;
-    if (status === "denied" && equipmentDecisionReason.trim().length < 5) {
-      setEquipmentDecisionError("Enter a decline reason of at least 5 characters.");
-      return;
-    }
-    setEquipmentDecisionError("");
-    try {
-      await equipmentRequestDecisionMutation.mutateAsync({
-        bookingId: selectedBooking.id,
-        status,
-        reason: equipmentDecisionReason.trim(),
-      });
-      closeModal();
-    } catch (error) {
-      setEquipmentDecisionError(error instanceof Error ? error.message : "The decision failed.");
-    }
   };
 
   const cancelActiveBooking = async () => {
@@ -133,7 +117,7 @@ export function ActiveBookingsTab(props: ActiveBookingsTabProps) {
     Boolean(booking.equipment) && booking.equipmentRequestStatus === "pending";
 
   return (
-    <div className="bg-gray-50 rounded-lg p-4 sm:p-6 mt-4 md:mt-0">
+    <div className="mt-4 min-w-0 max-w-full overflow-x-hidden rounded-lg bg-gray-50 p-4 sm:p-6 md:mt-0">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-0 mb-4">
         <h3 className="text-base sm:text-lg font-semibold text-gray-900">Currently Active Facility Bookings</h3>
         <span className="text-xs sm:text-sm text-gray-600 whitespace-nowrap">
@@ -143,13 +127,13 @@ export function ActiveBookingsTab(props: ActiveBookingsTabProps) {
         </span>
       </div>
       {activeBookings.length > 0 ? (
-        <div className="space-y-3">
+        <div className="min-w-0 space-y-3">
           {activeBookingsFiltered
             .slice(activeBookingsPage * itemsPerPage, (activeBookingsPage + 1) * itemsPerPage)
             .map((booking) => (
-              <div key={booking.id} onClick={() => handleBookingClick(booking)} className="bg-white rounded-lg p-3 sm:p-4 border border-gray-200 hover:border-green-300 hover:shadow-sm transition-all duration-200 cursor-pointer">
+              <div key={booking.id} onClick={() => handleBookingClick(booking)} className="min-w-0 max-w-full cursor-pointer overflow-hidden rounded-lg border border-gray-200 bg-white p-3 transition-all duration-200 hover:border-green-300 hover:shadow-sm sm:p-4">
                 {/* Mobile layout */}
-                <div className="flex flex-col gap-3 md:hidden">
+                <div className="flex min-w-0 flex-col gap-3 lg:hidden">
                   <div className="flex items-start gap-3">
                     <div className="bg-green-100 p-2 rounded-lg flex-shrink-0">
                       <CheckCircle className="h-5 w-5 text-green-600" />
@@ -179,67 +163,26 @@ export function ActiveBookingsTab(props: ActiveBookingsTabProps) {
                       <p className="text-xs text-gray-500">{formatDate(booking.endTime)}</p>
                     </div>
                   </div>
-                  <div className="flex flex-wrap gap-2 pl-11">
+                  <div className="flex flex-wrap items-center gap-1.5 pl-11">
                     <span className="inline-flex items-center justify-center px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">Active</span>
                     {!!booking.equipment && booking.equipmentRequestStatus && (
-                      <Badge variant={booking.equipmentRequestStatus === "approved" ? "default" : booking.equipmentRequestStatus === "denied" ? "destructive" : "secondary"}>
-                        Equipment {booking.equipmentRequestStatus}
+                      <Badge className="max-w-full whitespace-normal text-left" variant={booking.equipmentRequestStatus === "approved" ? "default" : ["denied", "declined"].includes(booking.equipmentRequestStatus) ? "destructive" : "secondary"}>
+                        Equipment {getEquipmentRequestStatusLabel(booking.equipmentRequestStatus)}
                       </Badge>
                     )}
                   </div>
                   {booking.purpose && <div className="pl-11">{renderPurposeButton(booking, 'active-mobile')}</div>}
-                  {!!booking.equipment && (
-                    <div className="pl-11 mt-2">
-                      <div className="bg-white border border-gray-200 rounded-lg p-3">
-                        <h5 className="text-xs font-semibold text-gray-700 mb-3">Equipment or Needs</h5>
-                        <div className="space-y-2">
-                          {renderEquipmentLine(booking)}
-                        </div>
-                        <div className="flex flex-col gap-2 mt-3">
-                          {booking.arrivalConfirmationDeadline && !booking.arrivalConfirmed && (
-                            <>
-                              <div className="text-xs text-gray-500 text-center">Confirmation required in:</div>
-                              <div className="flex justify-center">
-                                <CountdownComponent expiry={booking.arrivalConfirmationDeadline} onExpire={() => onArrivalExpire(booking)} />
-                              </div>
-                              <Button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  e.preventDefault();
-                                  confirmArrivalMutation.mutate({ bookingId: booking.id });
-                                }}
-                                variant="outline"
-                                size="sm"
-                                disabled={confirmArrivalMutation.isPending}
-                                aria-label={`Confirm arrival for booking ${booking.id}`}
-                                className="w-full text-xs"
-                              >
-                                {confirmArrivalMutation.isPending ? (
-                                  <span className="flex items-center gap-2">
-                                    <Loader2 className="h-3 w-3 animate-spin" />
-                                    Confirming...
-                                  </span>
-                                ) : (
-                                  'Confirm Arrival'
-                                )}
-                              </Button>
-                            </>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  )}
                   {isAdmin && (
-                    <div className="pl-11" onClick={(event) => event.stopPropagation()}>
-                      <Button type="button" size="sm" variant="outline" onClick={() => handleBookingClick(booking)}>
+                    <div className="flex justify-end pl-11" onClick={(event) => event.stopPropagation()}>
+                      <Button type="button" size="sm" variant="outline" className="min-h-[40px] max-w-full whitespace-normal" onClick={() => handleBookingClick(booking)}>
                         {hasPendingEquipment(booking) ? "Review equipment" : "Booking details & actions"}
                       </Button>
                     </div>
                   )}
-                  {!booking.equipment && booking.arrivalConfirmationDeadline && !booking.arrivalConfirmed && (
-                    <div className="pl-11 space-y-2">
-                      <div className="text-xs text-gray-500 text-center">Confirmation required in:</div>
-                      <div className="flex justify-center">
+                  {booking.arrivalConfirmationDeadline && !booking.arrivalConfirmed && (
+                    <div className="flex min-w-0 flex-wrap items-center justify-between gap-2 pl-11">
+                      <div className="min-w-0">
+                        <div className="text-xs text-gray-500">Confirmation required in:</div>
                         <CountdownComponent expiry={booking.arrivalConfirmationDeadline} onExpire={() => onArrivalExpire(booking)} />
                       </div>
                       <Button
@@ -252,7 +195,7 @@ export function ActiveBookingsTab(props: ActiveBookingsTabProps) {
                         size="sm"
                         disabled={confirmArrivalMutation.isPending}
                         aria-label={`Confirm arrival for booking ${booking.id}`}
-                        className="w-full text-xs"
+                        className="min-h-[40px] shrink-0 text-xs"
                       >
                         {confirmArrivalMutation.isPending ? (
                           <span className="flex items-center gap-2">
@@ -267,113 +210,97 @@ export function ActiveBookingsTab(props: ActiveBookingsTabProps) {
                   )}
                 </div>
                 {/* Desktop layout */}
-                <div className="hidden md:flex items-center justify-between gap-6">
-                  {/* Left section: User info */}
-                  <div className="flex-shrink-0">
-                    <div className="flex items-center gap-3">
-                      <div className="bg-green-100 p-2.5 rounded-lg">
-                        <CheckCircle className="h-5 w-5 text-green-600" />
-                      </div>
-                      <div>
-                        <h4 className="font-semibold text-gray-900 text-base leading-tight">{getUserEmail(booking.userId)}</h4>
-                        <p className="text-sm text-gray-600 mt-0.5 leading-tight">{getFacilityName(booking.facilityId)}</p>
-                        <p className="text-xs text-gray-600 mt-0.5">Name: {booking.name || "Not recorded"} · Program: {booking.program || "Not recorded"}</p>
-                        <div className="flex items-center gap-2 mt-1.5">
-                          <span className="text-xs text-gray-500">Participants:</span>
-                          <span className="px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800">{booking.participants || 0}</span>
-                          {booking.purpose && (
-                            <>
-                              <span className="text-gray-300">•</span>
-                              {renderPurposeButton(booking, 'active-desktop', 'inline-flex items-center gap-1 text-xs text-pink-600 hover:text-pink-700 transition-colors')}
-                            </>
-                          )}
-                        </div>
+                <div className="hidden min-w-0 gap-4 lg:grid lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
+                  <div className="flex min-w-0 items-start gap-3">
+                    <div className="shrink-0 rounded-lg bg-green-100 p-2.5">
+                      <CheckCircle className="h-5 w-5 text-green-600" />
+                    </div>
+                    <div className="min-w-0">
+                      <h4 className="break-all text-base font-semibold leading-tight text-gray-900">{getUserEmail(booking.userId)}</h4>
+                      <p className="mt-0.5 break-words text-sm leading-tight text-gray-600">{getFacilityName(booking.facilityId)}</p>
+                      <p className="mt-0.5 break-words text-xs text-gray-600">Name: {booking.name || "Not recorded"} · Program: {booking.program || "Not recorded"}</p>
+                      <div className="mt-1.5 flex min-w-0 flex-wrap items-center gap-2">
+                        <span className="text-xs text-gray-500">Participants:</span>
+                        <span className="rounded bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-800">{booking.participants || 0}</span>
+                        {booking.purpose && (
+                          <>
+                            <span className="text-gray-300">•</span>
+                            {renderPurposeButton(booking, 'active-desktop', 'inline-flex max-w-full items-center gap-1 break-words text-xs text-pink-600 transition-colors hover:text-pink-700')}
+                          </>
+                        )}
                       </div>
                     </div>
                   </div>
-                  {/* Right section: Time, Status, Equipment, and Actions */}
-                  <div className="flex items-center gap-6">
-                    {/* Time Info */}
-                    <div className="flex items-center gap-4">
-                      <div className="text-center">
-                        <p className="text-xs font-medium text-gray-500 mb-1">Started</p>
-                        <p className="text-lg font-semibold text-gray-900 whitespace-nowrap">{formatTime(booking.startTime)}</p>
-                        <p className="text-xs text-gray-500 mt-0.5">{formatDate(booking.startTime)}</p>
-                      </div>
-                      <div className="text-center">
-                        <p className="text-xs font-medium text-gray-500 mb-1">Ends</p>
-                        <p className="text-lg font-semibold text-gray-900 whitespace-nowrap">{formatTime(booking.endTime)}</p>
-                        <p className="text-xs text-gray-500 mt-0.5">{formatDate(booking.endTime)}</p>
-                      </div>
+                  <div className="grid min-w-0 grid-cols-2 gap-3">
+                    <div className="min-w-0 text-center">
+                      <p className="mb-1 text-xs font-medium text-gray-500">Started</p>
+                      <p className="break-words text-base font-semibold text-gray-900">{formatTime(booking.startTime)}</p>
+                      <p className="mt-0.5 break-words text-xs text-gray-500">{formatDate(booking.startTime)}</p>
                     </div>
-                    {/* Status and Actions */}
-                    <div className="flex flex-col gap-2.5">
-                      <div className="flex items-center gap-2">
-                        <span className="px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800 whitespace-nowrap">Active</span>
-                        {!!booking.equipment && booking.equipmentRequestStatus && (
-                          <Badge variant={booking.equipmentRequestStatus === "approved" ? "default" : booking.equipmentRequestStatus === "denied" ? "destructive" : "secondary"}>
-                            Equipment {booking.equipmentRequestStatus}
-                          </Badge>
-                        )}
-                      </div>
-                      {booking.arrivalConfirmationDeadline && !booking.arrivalConfirmed && (
-                        <div className="flex flex-col gap-2 items-end">
-                          <div className="text-xs text-gray-500">Confirmation required in:</div>
-                          <CountdownComponent expiry={booking.arrivalConfirmationDeadline} onExpire={() => onArrivalExpire(booking)} />
-                          <Button
-                            size="sm"
-                            type="button"
-                            variant="outline"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              e.preventDefault();
-                              console.log('Confirm Arrival clicked', booking);
-                              confirmArrivalMutation.mutate({ bookingId: booking.id });
-                            }}
-                            disabled={confirmArrivalMutation.isPending}
-                            className="text-xs font-medium h-7 px-3 pointer-events-auto"
-                            aria-label={`Confirm arrival for booking ${booking.id}`}
-                          >
-                            {confirmArrivalMutation.isPending ? (
-                              <span className="flex items-center gap-2">
-                                <Loader2 className="h-3 w-3 animate-spin" />
-                                Confirming...
-                              </span>
-                            ) : (
-                              'Confirm Arrival'
-                            )}
-                          </Button>
-                        </div>
+                    <div className="min-w-0 text-center">
+                      <p className="mb-1 text-xs font-medium text-gray-500">Ends</p>
+                      <p className="break-words text-base font-semibold text-gray-900">{formatTime(booking.endTime)}</p>
+                      <p className="mt-0.5 break-words text-xs text-gray-500">{formatDate(booking.endTime)}</p>
+                    </div>
+                    <div className="col-span-2 flex min-w-0 flex-wrap items-center gap-1.5">
+                      <span className="inline-flex max-w-full items-center rounded-full bg-green-100 px-3 py-1 text-xs font-medium text-green-800">Active</span>
+                      {!!booking.equipment && booking.equipmentRequestStatus && (
+                        <Badge className="max-w-full whitespace-normal text-left" variant={booking.equipmentRequestStatus === "approved" ? "default" : ["denied", "declined"].includes(booking.equipmentRequestStatus) ? "destructive" : "secondary"}>
+                          Equipment {getEquipmentRequestStatusLabel(booking.equipmentRequestStatus)}
+                        </Badge>
+                      )}
+                      {isAdmin && (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className="ml-auto min-h-[40px] max-w-full whitespace-normal"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            handleBookingClick(booking);
+                          }}
+                        >
+                          {hasPendingEquipment(booking) ? "Review equipment" : "Booking actions"}
+                        </Button>
                       )}
                     </div>
-                    {/* Equipment List */}
-                    {!!booking.equipment && (
-                      <div className="bg-gradient-to-br from-gray-50 to-gray-100 border border-gray-200 rounded-xl p-3.5 w-[250px] h-[145px] flex flex-col shadow-sm">
-                        <div className="flex items-center justify-between mb-2.5 flex-shrink-0">
-                          <h5 className="text-[10px] font-bold text-gray-700 uppercase tracking-wider">Equipment or Needs</h5>
+                    {booking.arrivalConfirmationDeadline && !booking.arrivalConfirmed && (
+                      <div className="col-span-2 flex min-w-0 flex-wrap items-center justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="text-xs text-gray-500">Confirmation required in:</p>
+                          <CountdownComponent expiry={booking.arrivalConfirmationDeadline} onExpire={() => onArrivalExpire(booking)} />
                         </div>
-                        <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent hover:scrollbar-thumb-gray-400">
-                          <div className="space-y-0">
-                            {renderEquipmentLine(booking)}
-                          </div>
-                        </div>
+                        <Button
+                          size="sm"
+                          type="button"
+                          variant="outline"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            confirmArrivalMutation.mutate({ bookingId: booking.id });
+                          }}
+                          disabled={confirmArrivalMutation.isPending}
+                          className="min-h-[40px] shrink-0 text-xs"
+                          aria-label={`Confirm arrival for booking ${booking.id}`}
+                        >
+                          {confirmArrivalMutation.isPending ? (
+                            <span className="flex items-center gap-2">
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                              Confirming...
+                            </span>
+                          ) : (
+                            'Confirm Arrival'
+                          )}
+                        </Button>
                       </div>
-                    )}
-                    {isAdmin && (
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          handleBookingClick(booking);
-                        }}
-                      >
-                        {hasPendingEquipment(booking) ? "Review equipment" : "Booking actions"}
-                      </Button>
                     )}
                   </div>
                 </div>
+                {!!booking.equipment && (
+                  <div className="mt-3 min-w-0 max-w-full overflow-hidden rounded-md border border-gray-100 bg-gray-50 p-3">
+                    <h5 className="mb-2 text-[10px] font-bold uppercase tracking-wider text-gray-700">Booked Equipment</h5>
+                    <div className="min-w-0">{renderEquipmentLine(booking)}</div>
+                  </div>
+                )}
               </div>
             ))}
           {activeBookingsFiltered.length > itemsPerPage && renderPagination(activeBookingsFiltered.length, activeBookingsPage, setActiveBookingsPage)}
@@ -388,7 +315,7 @@ export function ActiveBookingsTab(props: ActiveBookingsTabProps) {
       )}
 
       <Dialog open={isModalOpen} onOpenChange={closeModal}>
-        <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+        <DialogContent className="max-w-lg w-full max-h-[90vh] overflow-y-auto p-4 sm:p-6 rounded-xl mx-2">
           <DialogHeader>
             <DialogTitle>Active Booking Details</DialogTitle>
           </DialogHeader>
@@ -397,7 +324,7 @@ export function ActiveBookingsTab(props: ActiveBookingsTabProps) {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <h4 className="text-sm font-medium text-gray-500 mb-1">User</h4>
-                  <p className="text-sm font-semibold text-gray-900">{getUserEmail(selectedBooking.userId)}</p>
+                  <p className="break-words text-sm font-semibold text-gray-900">{getUserEmail(selectedBooking.userId)}</p>
                   <p className="text-xs text-gray-600 mt-1">Role: {getUserRole(selectedBooking.userId)}</p>
                 </div>
                 <div>
@@ -408,11 +335,11 @@ export function ActiveBookingsTab(props: ActiveBookingsTabProps) {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <h4 className="text-sm font-medium text-gray-500 mb-1">Name</h4>
-                  <p className="text-sm text-gray-900">{selectedBooking.name || "Not recorded"}</p>
+                  <p className="break-words text-sm text-gray-900">{selectedBooking.name || "Not recorded"}</p>
                 </div>
                 <div>
                   <h4 className="text-sm font-medium text-gray-500 mb-1">Program</h4>
-                  <p className="text-sm text-gray-900">{selectedBooking.program || "Not recorded"}</p>
+                  <p className="break-words text-sm text-gray-900">{selectedBooking.program || "Not recorded"}</p>
                 </div>
               </div>
               <Separator />
@@ -509,74 +436,32 @@ export function ActiveBookingsTab(props: ActiveBookingsTabProps) {
               {Boolean(isAdmin && selectedBooking.equipment) && (
                 <>
                   <Separator />
+                  <EquipmentApprovalPanel key={selectedBooking.id} booking={selectedBooking} mutation={equipmentRequestDecisionMutation} />
+                </>
+              )}
+              {Boolean(isAdmin && selectedBooking.status === "approved") && (
+                <>
+                  <Separator />
                   <div className="space-y-2 rounded-md border border-gray-200 p-3">
-                    <div className="flex items-center justify-between gap-2">
-                      <h3 className="text-sm font-semibold text-gray-900">Equipment borrowing request</h3>
-                      <Badge variant="outline">{selectedBooking.equipmentRequestStatus || "Pending review"}</Badge>
-                    </div>
-                    <p className="text-xs text-gray-600">
-                      Requester: {selectedBooking.name || "Not recorded"} · {getUserRole(selectedBooking.userId)} · Program/department: {selectedBooking.program || "Not recorded"}
-                    </p>
-                    <p className="text-xs text-gray-600">
-                      Requested for: {formatDate(selectedBooking.startTime)} · {formatTime(selectedBooking.startTime)}-{formatTime(selectedBooking.endTime)}
-                    </p>
-                    {selectedBooking.equipmentRequestStatus === "pending" && (
-                      <>
-                        <Textarea
-                          value={equipmentDecisionReason}
-                          maxLength={1000}
-                          onChange={(event) => setEquipmentDecisionReason(event.target.value)}
-                          placeholder="A reason is required to decline this equipment request."
-                        />
-                        {equipmentDecisionError && <p role="alert" className="text-sm text-red-600">{equipmentDecisionError}</p>}
-                        <div className="flex flex-wrap gap-2">
-                          <Button
-                            type="button"
-                            size="sm"
-                            disabled={equipmentRequestDecisionMutation.isPending}
-                            onClick={() => void runEquipmentDecision("approved")}
-                          >
-                            Approve equipment
-                          </Button>
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="destructive"
-                            disabled={equipmentRequestDecisionMutation.isPending || equipmentDecisionReason.trim().length < 5}
-                            onClick={() => void runEquipmentDecision("denied")}
-                          >
-                            Decline equipment
-                          </Button>
-                        </div>
-                      </>
-                    )}
-                    {Boolean(isAdmin && selectedBooking.status === "approved") && (
-                      <>
-                        <Separator />
-                        <div className="space-y-2 rounded-md border border-gray-200 p-3">
-                          <h3 className="text-sm font-semibold text-gray-900">Cancel active booking</h3>
-                          <Textarea
-                            value={adminActionReason}
-                            maxLength={1000}
-                            onChange={(event) => setAdminActionReason(event.target.value)}
-                            placeholder="A cancellation reason of at least 5 characters is required."
-                          />
-                          {adminActionError && <p role="alert" className="text-sm text-red-600">{adminActionError}</p>}
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="destructive"
-                            disabled={adminBookingActionMutation.isPending || adminActionReason.trim().length < 5}
-                            onClick={() => void cancelActiveBooking()}
-                          >
-                            Cancel booking
-                          </Button>
-                        </div>
-                      </>
-                    )}
-                    {selectedBooking.equipmentDeclineReason && (
-                      <p className="text-sm text-red-700"><strong>Decline reason:</strong> {selectedBooking.equipmentDeclineReason}</p>
-                    )}
+                    <h3 className="text-sm font-semibold text-gray-900">Cancel active booking</h3>
+                    <Textarea
+                      value={adminActionReason}
+                      maxLength={1000}
+                      className="min-h-[44px]"
+                      onChange={(event) => setAdminActionReason(event.target.value)}
+                      placeholder="A cancellation reason of at least 5 characters is required."
+                    />
+                    {adminActionError && <p role="alert" className="text-sm text-red-600">{adminActionError}</p>}
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="destructive"
+                      className="min-h-[44px] w-full sm:w-auto"
+                      disabled={adminBookingActionMutation.isPending || adminActionReason.trim().length < 5}
+                      onClick={() => void cancelActiveBooking()}
+                    >
+                      Cancel booking
+                    </Button>
                   </div>
                 </>
               )}

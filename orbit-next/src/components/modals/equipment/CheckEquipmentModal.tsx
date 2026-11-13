@@ -145,7 +145,7 @@ export function CheckEquipmentModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+      <DialogContent className="max-w-lg w-full max-h-[90vh] overflow-y-auto p-4 sm:p-6 rounded-xl mx-2">
         <DialogHeader>
           <DialogTitle className="text-xl font-bold">Check Equipment & Needs</DialogTitle>
           <DialogDescription>
@@ -177,11 +177,11 @@ export function CheckEquipmentModal({
                 {equipmentItems.map((item, idx) => (
                   <div
                     key={idx}
-                    className="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-lg"
+                    className="flex flex-col gap-3 p-3 bg-white border border-gray-200 rounded-lg sm:flex-row sm:items-center sm:justify-between"
                   >
                     <div className="flex items-center gap-2 flex-1">
                       {item.isOther && <span className="text-lg">📦</span>}
-                      <span className="text-sm font-medium text-gray-900">{item.label}</span>
+                      <span className="break-words text-sm font-medium text-gray-900">{item.label}</span>
                     </div>
                     
                     <div className="flex items-center gap-2">
@@ -200,7 +200,7 @@ export function CheckEquipmentModal({
                           size="sm"
                           variant="outline"
                           onClick={() => toggleItemStatus(item.label, 'prepared')}
-                          className={`h-8 w-8 p-0 ${
+                          className={`min-h-[44px] min-w-[44px] p-0 ${
                             itemStatuses[item.label] === 'prepared' 
                               ? 'bg-green-100 border-green-500 text-green-700' 
                               : 'hover:bg-green-50'
@@ -213,7 +213,7 @@ export function CheckEquipmentModal({
                           size="sm"
                           variant="outline"
                           onClick={() => toggleItemStatus(item.label, 'not_available')}
-                          className={`h-8 w-8 p-0 ${
+                          className={`min-h-[44px] min-w-[44px] p-0 ${
                             itemStatuses[item.label] === 'not_available' 
                               ? 'bg-red-100 border-red-500 text-red-700' 
                               : 'hover:bg-red-50'
@@ -247,6 +247,7 @@ export function CheckEquipmentModal({
             </div>
             <div className="flex items-center gap-2">
               <Button
+                className="min-h-[44px]"
                 variant="outline"
                 onClick={onClose}
                 disabled={isSaving}
@@ -256,7 +257,7 @@ export function CheckEquipmentModal({
               <Button
                 onClick={handleSave}
                 disabled={!hasChanges || isSaving}
-                className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 min-w-[140px]"
+                className="min-h-[44px] bg-blue-600 hover:bg-blue-700 disabled:opacity-50 min-w-[140px]"
               >
                 {isSaving ? (
                   <>

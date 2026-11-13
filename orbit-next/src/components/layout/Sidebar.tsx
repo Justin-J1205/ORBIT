@@ -40,7 +40,7 @@ export default function Sidebar({ items, activeItem, onItemClick }: SidebarProps
   };
 
   return (
-    <div className="material-card p-3 sm:p-4 flex flex-col h-full">
+    <div className="bg-card p-3 sm:p-4 flex flex-col h-full">
       {/* Logo / Title */}
       <div className="mb-3 sm:mb-4 flex items-center gap-3">
         {/* logo removed as requested - sidebar shows no header text or image */}

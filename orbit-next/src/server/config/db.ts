@@ -1,105 +1,57 @@
 import "../utils/json-parse-patch";
 
-import { drizzle } from "drizzle-orm/node-postgres";
-import { Pool } from "pg";
-import { types } from "pg";
+import { drizzle, type PostgresJsDatabase } from "drizzle-orm/postgres-js";
+import postgres from "postgres";
 
 import * as schema from "@shared/schema";
 
-let _pool: Pool | null = null;
-let _db: ReturnType<typeof drizzle<typeof schema>> | null = null;
+type DatabaseClient = ReturnType<typeof postgres>;
 
-// Setup custom JSONB type parser to handle "undefined" strings
-// This needs to run before any database queries are made
-function setupJSONBParser() {
-  const parseJSONB = (val: string) => {
-    if (val === null || val === undefined) return null;
-    const trimmed = String(val).trim();
-    
-    // Handle both quoted and unquoted "undefined", "null", empty string
-    // PostgreSQL JSONB stores strings WITH quotes, so "undefined" becomes '"undefined"'
-    if (
-      trimmed === "undefined" || 
-      trimmed === '"undefined"' ||  // JSON-quoted string
-      trimmed === "null" || 
-      trimmed === '"null"' ||       // JSON-quoted string  
-      trimmed === '""' ||           // Empty JSON string
-      trimmed === ""
-    ) {
-      return null;
-    }
-    
-    try {
-      return JSON.parse(trimmed);
-    } catch (e) {
-      console.warn("[DB] Failed to parse JSONB, returning null:", trimmed.substring(0, 50));
-      return null;
-    }
-  };
-  
-  types.setTypeParser(114, parseJSONB);   // JSON type
-  types.setTypeParser(3802, parseJSONB);  // JSONB type
-}
+const globalForDatabase = globalThis as typeof globalThis & {
+  __orbitPostgresClient?: DatabaseClient;
+};
 
-// Call parser setup immediately
-setupJSONBParser();
+let _db: PostgresJsDatabase<typeof schema> | null = null;
 
-function getPool() {
-  console.log("[DEBUG] DATABASE_URL at runtime:", process.env.DATABASE_URL);
-  if (_pool) return _pool;
+function getClient(): DatabaseClient {
+  if (globalForDatabase.__orbitPostgresClient) {
+    return globalForDatabase.__orbitPostgresClient;
+  }
 
   let raw = process.env.DATABASE_URL || "postgresql://localhost:5432/postgres";
   raw = raw.trim();
 
-  // Use reasonable pool size: 5 for local dev, 1 for serverless
-  const isServerless = process.env.VERCEL === "1" || process.env.AWS_REGION;
-  const configuredMax = parseInt(process.env.DB_POOL_MAX || "5", 10);
-  const max = Math.max(1, isServerless ? 1 : configuredMax);
-
-  // Normalize to ensure pgBouncer transaction pooling to prevent session exhaustion.
   try {
     const url = new URL(raw);
-    if (!/localhost|127\.0\.0\.1/i.test(url.hostname)) {
-      if (!url.searchParams.get("pgbouncer")) url.searchParams.set("pgbouncer", "true");
-      // Don't force pool_mode - port 6543 handles transaction mode automatically
-      if (!url.searchParams.get("connection_limit")) url.searchParams.set("connection_limit", String(max));
-    }
+    url.searchParams.delete("pgbouncer");
+    url.searchParams.delete("connection_limit");
     raw = url.toString();
-  } catch (e) {
-    console.warn("[db] Could not parse DATABASE_URL for normalization", e);
+  } catch {
+    console.warn("[db] Could not parse DATABASE_URL for normalization");
   }
 
-  const idleTimeoutMillis = parseInt(process.env.DB_POOL_IDLE_MS || "30000", 10);
-  const connectionTimeoutMillis = parseInt(
-    process.env.DB_POOL_CONNECTION_TIMEOUT_MS || (isServerless ? "20000" : "5000"),
-    10,
-  );
   const statementTimeoutMillis = parseInt(process.env.DB_POOL_STATEMENT_TIMEOUT_MS || "30000", 10);
 
-  _pool = new Pool({
-    connectionString: raw,
-    max,
-    idleTimeoutMillis,
-    connectionTimeoutMillis,
-    statement_timeout: statementTimeoutMillis,
-    allowExitOnIdle: true,
-    ssl: /localhost|127\.0\.0\.1/.test(raw) ? undefined : { rejectUnauthorized: false },
+  const client = postgres(raw, {
+    prepare: false,
+    max: 5,
+    ssl: "require",
+    connect_timeout: 10,
+    idle_timeout: 20,
+    connection: { statement_timeout: statementTimeoutMillis },
   });
 
-  _pool.on("error", (err) => {
-    console.error("[db] Pool error", err);
-  });
-
-  return _pool;
+  globalForDatabase.__orbitPostgresClient = client;
+  return client;
 }
 
-export const pool = new Proxy({} as Pool, {
+export const pool = new Proxy({} as ReturnType<typeof postgres>, {
   get(_, prop) {
-    return (getPool() as any)[prop];
+    return (getClient() as any)[prop];
   },
 });
 
-export const db = new Proxy({} as ReturnType<typeof drizzle<typeof schema>>, {
+export const db = new Proxy({} as PostgresJsDatabase<typeof schema>, {
   get(_, prop) {
     // During build time, return mock implementations that don't access the database
     if (process.env.npm_lifecycle_event === 'build' || process.env.NEXT_PHASE === 'phase-production-build') {
@@ -142,7 +94,7 @@ export const db = new Proxy({} as ReturnType<typeof drizzle<typeof schema>>, {
     }
     
     if (!_db) {
-      _db = drizzle(getPool(), { schema, logger: false });
+      _db = drizzle(getClient(), { schema, logger: false });
     }
     return (_db as any)[prop];
   },

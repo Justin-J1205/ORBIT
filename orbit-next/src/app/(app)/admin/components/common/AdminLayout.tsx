@@ -37,7 +37,7 @@ export function AdminLayout({
       <Header onMobileToggle={() => setMobileSidebarOpen(prev => !prev)} />
       <div className="flex">
         {/* Desktop sidebar (fixed) */}
-        <div className="hidden md:block w-64 h-[calc(100vh-4rem)] border-r bg-card fixed top-16 left-0 z-30 overflow-y-auto">
+        <div className="hidden md:block w-64 h-[calc(100vh-4rem)] bg-card fixed top-16 left-0 z-30 overflow-y-auto">
           <Sidebar
             items={sidebarItems}
             activeItem={selectedView}
@@ -62,7 +62,7 @@ export function AdminLayout({
                 animate={{ x: 0 }}
                 exit={{ x: '-100%' }}
                 transition={{ type: 'tween', duration: 0.3 }}
-                className="fixed top-0 left-0 z-50 w-64 h-full bg-card border-r shadow-lg md:hidden"
+                className="fixed top-0 left-0 z-50 w-64 h-full bg-card md:hidden"
               >
                 <Sidebar
                   items={sidebarItems}
@@ -75,7 +75,7 @@ export function AdminLayout({
         </AnimatePresence>
 
         {/* Main content area (scrollable) */}
-        <div className="flex-1 md:ml-64 min-h-[calc(100vh-4rem)] w-full overflow-x-hidden">
+        <div className="min-w-0 flex-1 md:ml-64 min-h-[calc(100vh-4rem)] w-full overflow-x-hidden">
           {children}
         </div>
       </div>

@@ -96,13 +96,13 @@ export function generateBookingWeeklyReport(
 
   ws['!cols'] = [
     { wch: 12 },
-    { wch: 12 },
+    { wch: 30 },
     { wch: 6 },
     { wch: 18 },
-    { wch: 28 },
+    { wch: 30 },
     { wch: 24 },
     { wch: 16 },
-    { wch: 25 },
+    { wch: 35 },
     { wch: 12 },
     { wch: 12 },
     { wch: 40 },

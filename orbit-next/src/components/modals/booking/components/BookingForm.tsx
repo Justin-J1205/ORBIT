@@ -160,6 +160,7 @@ interface BookingFormProps {
   onSubmit: (data: any) => void;
   onClose: () => void;
   isSubmitting: boolean;
+  submitError?: string | null;
   validationWarnings: ValidationError[];
   slotManagement: any;
   selectedFacility: any;
@@ -177,6 +178,7 @@ export function BookingForm({
   onSubmit,
   onClose,
   isSubmitting,
+  submitError,
   validationWarnings,
   selectedFacility,
   isAdmin = false,
@@ -724,6 +726,16 @@ const { data: equipmentAvailability } = useQuery<Array<{ key: string; label: str
           <ul className="text-xs text-red-600 space-y-0.5 mt-1">
             {hasDailyLimitError && <li>• You have reached the maximum of 2 bookings per day. Please cancel an existing booking first or choose a different day.</li>}
           </ul>
+        )}
+
+        {submitError && (
+          <div
+            role="alert"
+            aria-live="assertive"
+            className="min-w-0 rounded-md border border-red-300 bg-red-50 px-3 py-2.5 text-sm font-medium text-red-800"
+          >
+            <p className="break-words">{submitError}</p>
+          </div>
         )}
 
         {/* Footer Buttons */}

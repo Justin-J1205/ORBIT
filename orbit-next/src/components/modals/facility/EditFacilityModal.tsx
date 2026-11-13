@@ -7,6 +7,7 @@ import { Switch } from "@/components/ui/switch";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/api";
 import { useToast } from "@/hooks/ui";
+import { getDefaultFacilityAllowedRoles } from "@shared/facilityAccess";
 
 interface Facility {
   id: number;
@@ -58,7 +59,9 @@ function EditFacilityModalContent({ facility, onClose, onSave }: EditFacilityMod
   const [description, setDescription] = useState(facility?.description ?? "");
   const [capacity, setCapacity] = useState(facility?.capacity ?? 0);
   const [isActive, setIsActive] = useState(facility?.isActive ?? false);
-  const [allowedRoles, setAllowedRoles] = useState<string[]>(facility?.allowedRoles ?? ["student", "faculty"]);
+  const [allowedRoles, setAllowedRoles] = useState<string[]>(
+    facility?.allowedRoles ?? getDefaultFacilityAllowedRoles(facility?.name)
+  );
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -192,6 +195,20 @@ function EditFacilityModalContent({ facility, onClose, onSave }: EditFacilityMod
               }}
             />
             Faculty
+          </label>
+          <label className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={allowedRoles.includes("admin")}
+              onChange={(e) => {
+                setAllowedRoles((prev) =>
+                  e.target.checked
+                    ? Array.from(new Set([...prev, "admin"]))
+                    : prev.filter((r) => r !== "admin")
+                );
+              }}
+            />
+            Admin
           </label>
         </div>
       </div>

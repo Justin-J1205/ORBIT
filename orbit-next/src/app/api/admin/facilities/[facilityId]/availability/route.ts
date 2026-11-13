@@ -7,7 +7,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 type RouteContext = {
-  params: { facilityId?: string };
+  params: Promise<{ facilityId: string }>;
 };
 
 function isYyyyMmDd(value: string): boolean {
@@ -20,7 +20,7 @@ export async function PUT(request: NextRequest, context: RouteContext) {
     return authResult.response;
   }
 
-  const idParam = context.params?.facilityId;
+  const { facilityId: idParam } = await context.params;
   const facilityId = Number(idParam);
   if (!idParam || !Number.isInteger(facilityId)) {
     return NextResponse.json({ message: "Invalid facility id" }, { status: 400 });

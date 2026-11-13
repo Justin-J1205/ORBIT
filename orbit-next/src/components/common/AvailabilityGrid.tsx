@@ -6,6 +6,7 @@ import { format } from 'date-fns';
 import { cn } from '@/lib/utils/utils';
 import { CalendarDays, CheckCircle2, Filter, Slash, Undo2 } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
+import { isFacilityAllowedForRole } from '@shared/facilityAccess';
 
 interface SlotItem {
   start: string;
@@ -15,7 +16,7 @@ interface SlotItem {
 }
 
 interface FacilityAvailability {
-  facility: { id: number; name: string; capacity: number; isActive: boolean };
+  facility: { id: number; name: string; capacity: number; isActive: boolean; allowedRoles?: string[] | null };
   maxUsageHours: number | null;
   slots: SlotItem[];
 }
@@ -131,13 +132,6 @@ export default function AvailabilityGrid({ date, onSelectRange, unavailableDates
   }
 
   // --- Room list for sidebar (per role) ---
-  // Define which roles can see which rooms
-  const roomRoleMap: Record<string, Array<'student' | 'faculty' | 'admin'>> = {
-    'Collaborative Learning 1': ['student', 'admin'],
-    'Collaborative Learning 2': ['student', 'admin'],
-    'Board Room': ['faculty', 'admin'],
-    'Faculty Lounge': ['faculty', 'admin'],
-  };
   const roomList = [
     { name: 'Collaborative Learning 1', match: /collaborative learning room 1/i },
     { name: 'Collaborative Learning 2', match: /collaborative learning room 2/i },
@@ -150,9 +144,11 @@ export default function AvailabilityGrid({ date, onSelectRange, unavailableDates
     if (found) acc[found.name] = f.facility.id;
     return acc;
   }, {} as Record<string, number>);
-  // Filter rooms by user role
   const userRole = user?.role || 'student';
-  const filteredRoomList = roomList.filter(room => (roomRoleMap[room.name] || []).includes(userRole));
+  const filteredRoomList = roomList.filter(room => {
+    const facility = facilities.find(item => room.match.test(item.facility.name));
+    return facility ? isFacilityAllowedForRole(facility.facility, userRole) : false;
+  });
 
   // --- Sidebar mini calendar (interactive) ---
   const renderMiniCalendar = () => {

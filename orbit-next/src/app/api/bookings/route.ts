@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { ZodError } from "zod";
 
 import { requireActiveUser } from "@/server/core";
 import { storage } from "@/server/core";
@@ -11,23 +12,27 @@ import {
   sendBookingNotifications,
   refreshBooking,
 } from "@/server/bookings/helpers";
+import { getManilaDayBounds } from "@/server/bookings/manilaTime";
 import { createFacilityBookingSchema } from "@shared/schema";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
-  const authResult = await requireActiveUser(request.headers);
-  if (!authResult.ok) {
-    return authResult.response;
-  }
-
   try {
+    const authResult = await requireActiveUser(request.headers);
+    if (!authResult.ok) {
+      return authResult.response;
+    }
+
     const bookings = await storage.getFacilityBookingsByUser(authResult.user.id);
     return NextResponse.json(bookings ?? [], { status: 200 });
   } catch (error) {
     console.error("[bookings] Failed to fetch user bookings:", error);
-    return NextResponse.json({ message: "Failed to fetch bookings" }, { status: 500 });
+    return NextResponse.json(
+      { message: "Unable to load bookings. Please try again." },
+      { status: 500 },
+    );
   }
 }
 
@@ -85,11 +90,11 @@ export async function POST(request: NextRequest) {
     const facility = facilityResult.value;
 
     const facilityEligibility = await ensureFacilityIsBookable(
-      authResult.user.id,
       facility,
       parsed.participants,
       parsed.startTime,
       parsed.endTime,
+      { isAdmin: isAdminUser, userRole: authResult.userRecord?.role },
     );
     if (!facilityEligibility.ok) {
       return NextResponse.json(facilityEligibility.error.body, { status: facilityEligibility.error.status });
@@ -114,10 +119,7 @@ export async function POST(request: NextRequest) {
 
     // Global daily booking limit: max 2 bookings per user per day
     if (!isAdminUser) {
-      const startOfDay = new Date(parsed.startTime);
-      startOfDay.setHours(0, 0, 0, 0);
-      const endOfDay = new Date(parsed.startTime);
-      endOfDay.setHours(23, 59, 59, 999);
+      const { start: startOfDay, end: endOfDay } = getManilaDayBounds(parsed.startTime);
 
       // Force refresh bookings after possible cancellation
       let allUserBookings = await storage.getFacilityBookingsByUser(authResult.user.id);
@@ -249,7 +251,20 @@ export async function POST(request: NextRequest) {
     }
 
     console.error("[bookings] Failed to create booking:", error);
+    if (error instanceof ZodError) {
+      return NextResponse.json(
+        { message: "Invalid booking details.", issues: error.issues },
+        { status: 400 },
+      );
+    }
+    if (error instanceof SyntaxError) {
+      return NextResponse.json(
+        { message: "Request body must be valid JSON." },
+        { status: 400 },
+      );
+    }
+
     const message = error instanceof Error ? error.message : "Failed to create booking";
-    return NextResponse.json({ message }, { status: 400 });
+    return NextResponse.json({ message }, { status: 500 });
   }
 }

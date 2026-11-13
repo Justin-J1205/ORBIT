@@ -13,6 +13,7 @@ import { ActiveBookingsTab, ScheduledBookingsTab } from './tabs';
 
 export type MutationRef<TArg> = {
   mutate: (arg: TArg) => void;
+  mutateAsync: (arg: TArg) => Promise<unknown>;
   isPending: boolean;
 };
 
@@ -49,13 +50,18 @@ export type BookingManagementSectionProps = {
   onBookingEndExpire: (booking: FacilityBooking) => void;
   confirmArrivalMutation: MutationRef<{ bookingId: FacilityBooking["id"] }>;
   openEquipmentModal: (booking: FacilityBooking) => void;
-  forceActiveBookingMutation: MutationRef<FacilityBooking>;
+  forceActiveBookingMutation: MutationRef<{ booking: FacilityBooking; reason: string }>;
   adminBookingActionMutation: {
     mutateAsync: (input: { bookingId: string; action: string; reason?: string; startTime?: string; endTime?: string; facilityId?: number; participants?: number; purpose?: string; name?: string; program?: string }) => Promise<unknown>;
     isPending: boolean;
   };
   equipmentRequestDecisionMutation: {
-    mutateAsync: (input: { bookingId: string; status: "approved" | "denied"; reason?: string }) => Promise<unknown>;
+    mutateAsync: (input: {
+      bookingId: string;
+      itemKey: string;
+      status: "approved" | "declined";
+      reason?: string;
+    }) => Promise<{ success: boolean; itemStatus: "approved" | "declined"; equipmentRequestStatus: string }>;
     isPending: boolean;
   };
 };
@@ -279,12 +285,12 @@ export function BookingManagementSection({
       
       return (
         <>
-          {items.map((item, idx) => {
-            const statusValue = getItemStatus(item.label);
-            return (
-              <div key={idx} className="flex items-center justify-between py-1">
-                <div className="flex items-center gap-1">
-                  <span className="text-xs text-gray-900 font-medium">
+          <div className="flex min-w-0 max-w-full flex-wrap gap-1.5 overflow-hidden">
+            {items.map((item, idx) => {
+              const statusValue = getItemStatus(item.label);
+              return (
+                <div key={idx} className="inline-flex min-w-0 max-w-full flex-wrap items-center gap-1.5 rounded-full border border-gray-200 bg-white px-2 py-1">
+                  <span className="min-w-0 break-words text-xs font-medium text-gray-900">
                     {item.isOther ? '' : item.label.toLowerCase()}
                   </span>
                   {item.isOther && item.otherValue && (
@@ -298,7 +304,7 @@ export function BookingManagementSection({
                                   e.stopPropagation();
                                   e.preventDefault();
                                 }}
-                                className="text-xs text-pink-600 hover:text-pink-700 font-medium transition-colors ml-1"
+                                className="max-w-full break-words text-xs font-medium text-pink-600 transition-colors hover:text-pink-700"
                               >
                                 View other
                               </button>
@@ -324,9 +330,8 @@ export function BookingManagementSection({
                       </PopoverContent>
                     </Popover>
                   )}
-                </div>
                 <span
-                  className={`text-xs font-semibold px-2 py-0.5 rounded ${
+                  className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold ${
                     statusValue === 'prepared'
                       ? 'bg-green-100 text-green-700'
                       : statusValue === 'not_available' || statusValue === 'not available'
@@ -336,9 +341,10 @@ export function BookingManagementSection({
                 >
                   {statusValue === 'not_available' ? 'not available' : statusValue}
                 </span>
-              </div>
-            );
-          })}
+                </div>
+              );
+            })}
+          </div>
         </>
       );
     } catch (e) {
@@ -361,14 +367,14 @@ export function BookingManagementSection({
     const status = getNeedsStatusForBooking(booking);
     if (status === "prepared") {
       return (
-        <span className="inline-flex items-center justify-center px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 text-xs font-medium">
+        <span className="inline-flex max-w-full items-center justify-center whitespace-normal rounded-full bg-emerald-100 px-3 py-1 text-xs font-medium text-emerald-800">
           Prepared
         </span>
       );
     }
     if (status === "not_available") return null;
     return (
-      <span className="inline-flex items-center justify-center px-3 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+      <span className="inline-flex max-w-full items-center justify-center whitespace-normal rounded-full bg-yellow-100 px-3 py-1 text-xs font-medium text-yellow-800">
         NEEDS
       </span>
     );

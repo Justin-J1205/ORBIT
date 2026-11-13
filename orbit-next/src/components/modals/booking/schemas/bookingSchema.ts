@@ -7,8 +7,8 @@
 import { z } from 'zod';
 import {
   ACADEMIC_PROGRAM_OPTIONS,
-  BOOKING_MAX_DURATION_MS,
   BOOKING_MIN_DURATION_MS,
+  exceedsBookingDurationLimit,
   BOOKING_MAX_DURATION_MINUTES,
   BOOKING_MIN_DURATION_MINUTES,
 } from '@shared/bookingRules';
@@ -50,7 +50,7 @@ export const FORM_LIMITS = {
 /**
  * Create booking form validation schema
  */
-export function createBookingSchema() {
+export function createBookingSchema(isAdmin = false) {
   return z
     .object({
       facilityId: z.string().min(1, "Please select a facility"),
@@ -87,7 +87,7 @@ export function createBookingSchema() {
                 path: ['endTime'] 
               });
             }
-            if (diff > BOOKING_MAX_DURATION_MS) {
+            if (exceedsBookingDurationLimit(diff, isAdmin)) {
               ctx.addIssue({ 
                 code: z.ZodIssueCode.custom, 
                 message: `Bookings cannot exceed ${BOOKING_MAX_DURATION_MINUTES} minutes`, 

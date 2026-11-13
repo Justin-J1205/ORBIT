@@ -46,8 +46,8 @@ export function DeleteScheduleConfirmModal({ isOpen, onClose, schedule }: Delete
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-md">
-        <div className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between rounded-t-lg">
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-md max-h-[85vh] sm:max-h-[90vh] overflow-y-auto">
+        <div className="sticky top-0 z-10 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between rounded-t-lg">
           <h2 className="text-xl font-semibold text-gray-900">Delete Report Schedule</h2>
           <button
             onClick={onClose}

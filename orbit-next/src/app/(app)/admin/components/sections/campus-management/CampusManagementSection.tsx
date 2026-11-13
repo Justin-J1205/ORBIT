@@ -122,27 +122,28 @@ export default function CampusManagementSection() {
             <p className="text-sm">Click &quot;+ Add Campus&quot; to create your first campus.</p>
           </div>
         ) : (
-          <table className="min-w-full text-sm">
-            <thead>
-              <tr className="bg-gray-50 border-b border-gray-200">
-                <th className="px-5 py-3 text-left font-semibold text-gray-600 uppercase text-xs tracking-wide">Name</th>
-                <th className="px-5 py-3 text-left font-semibold text-gray-600 uppercase text-xs tracking-wide">Order</th>
-                <th className="px-5 py-3 text-left font-semibold text-gray-600 uppercase text-xs tracking-wide">Status</th>
-                <th className="px-5 py-3 text-right font-semibold text-gray-600 uppercase text-xs tracking-wide">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {campuses.map(campus => (
-                <tr key={campus.id} className={!campus.isActive ? "bg-yellow-50/50" : "hover:bg-gray-50 transition-colors"}>
-                  <td className="px-5 py-3 font-medium text-gray-800">{campus.name}</td>
-                  <td className="px-5 py-3 text-gray-500">{campus.sortOrder ?? 0}</td>
-                  <td className="px-5 py-3">
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${campus.isActive ? "bg-green-100 text-green-800" : "bg-yellow-100 text-yellow-800"}`}>
-                      {campus.isActive ? "Active" : "Disabled"}
-                    </span>
-                  </td>
-                  <td className="px-5 py-3">
-                    <div className="flex items-center justify-end gap-2">
+          <div className="overflow-x-auto">
+            <table className="min-w-[560px] w-full text-sm">
+              <thead>
+                <tr className="bg-gray-50 border-b border-gray-200">
+                  <th className="px-5 py-3 text-left font-semibold text-gray-600 uppercase text-xs tracking-wide">Name</th>
+                  <th className="px-5 py-3 text-left font-semibold text-gray-600 uppercase text-xs tracking-wide">Order</th>
+                  <th className="px-5 py-3 text-left font-semibold text-gray-600 uppercase text-xs tracking-wide">Status</th>
+                  <th className="px-5 py-3 text-right font-semibold text-gray-600 uppercase text-xs tracking-wide">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {campuses.map(campus => (
+                  <tr key={campus.id} className={!campus.isActive ? "bg-yellow-50/50" : "hover:bg-gray-50 transition-colors"}>
+                    <td className="px-5 py-3 font-medium text-gray-800">{campus.name}</td>
+                    <td className="px-5 py-3 text-gray-500">{campus.sortOrder ?? 0}</td>
+                    <td className="px-5 py-3">
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${campus.isActive ? "bg-green-100 text-green-800" : "bg-yellow-100 text-yellow-800"}`}>
+                        {campus.isActive ? "Active" : "Disabled"}
+                      </span>
+                    </td>
+                    <td className="px-5 py-3">
+                      <div className="flex items-center justify-end gap-2">
                       <button
                         className="px-3 py-1.5 text-xs font-medium bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 rounded-md shadow-sm transition-colors"
                         onClick={() => {
@@ -189,19 +190,20 @@ export default function CampusManagementSection() {
                       >{deleteMutation.isPending && deleteMutation.variables === campus.id ? (
                           <span className="inline-flex items-center gap-1"><svg className="animate-spin h-3 w-3" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>Deleting…</span>
                         ) : "Delete"}</button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
 
       {/* Delete Confirmation Dialog with Facilities List */}
       {deleteId !== null && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded-lg shadow-xl max-w-md w-full mx-4">
+          <div className="bg-white p-6 rounded-lg shadow-xl max-w-md w-full max-h-[85vh] sm:max-h-[90vh] overflow-y-auto mx-4">
             <h3 className="text-lg font-semibold text-gray-800 mb-2">Delete Campus</h3>
             {deleteLoading ? (
               <div className="flex items-center gap-2 text-gray-500"><svg className="animate-spin h-4 w-4" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>Loading facilities…</div>

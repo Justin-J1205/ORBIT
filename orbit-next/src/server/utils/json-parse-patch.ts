@@ -1,7 +1,6 @@
 /**
- * Global JSON.parse patch to handle invalid string values like "undefined" or "null".
- * This module must be imported before the pg driver is loaded so that any code
- * that relies on JSON.parse (including pg's built-in type parsers) uses the patched version.
+ * Global JSON.parse patch to handle invalid string values in legacy JSONB data.
+ * Import before initializing the database client so driver JSON parsers use it.
  */
 
 if (typeof JSON !== "undefined" && typeof JSON.parse === "function") {

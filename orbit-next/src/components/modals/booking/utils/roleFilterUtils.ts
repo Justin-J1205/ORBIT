@@ -4,11 +4,14 @@
  * Utilities for filtering facilities based on user roles and access permissions.
  */
 
+import { isFacilityAllowedForRole } from "@shared/facilityAccess";
+
 export interface Facility {
   id: number;
   name: string;
   isActive: boolean;
   capacity: number;
+  allowedRoles?: string[] | null;
 }
 
 export interface User {
@@ -22,21 +25,7 @@ export interface User {
 export function filterFacilitiesByRole(facilities: Facility[], userRole?: string): Facility[] {
   return facilities.filter(facility => {
     if (!facility.isActive) return false;
-    
-    const name = String(facility.name || '').toLowerCase();
-    const restricted = /board room|boardroom|lounge/.test(name);
-    const role = userRole || 'student';
-    
-    // Admin sees everything
-    if (role === 'admin') return true;
-    
-    // Faculty sees ONLY Board Room and Faculty Lounge
-    if (role === 'faculty') {
-      return restricted;
-    }
-    
-    // Students see only non-restricted facilities
-    return !restricted;
+    return isFacilityAllowedForRole(facility, userRole || "student");
   });
 }
 
@@ -45,9 +34,9 @@ export function filterFacilitiesByRole(facilities: Facility[], userRole?: string
  */
 export function getPredefinedFacilities(): Facility[] {
   return [
-    { id: 1, name: "Collaborative Learning Room 1", isActive: true, capacity: 8 },
-    { id: 2, name: "Collaborative Learning Room 2", isActive: true, capacity: 8 },
-    { id: 3, name: "Board Room", isActive: true, capacity: 12 },
+    { id: 1, name: "Collaborative Learning Room 1", isActive: true, capacity: 8, allowedRoles: ["student", "faculty"] },
+    { id: 2, name: "Collaborative Learning Room 2", isActive: true, capacity: 8, allowedRoles: ["student", "faculty"] },
+    { id: 3, name: "Board Room", isActive: true, capacity: 12, allowedRoles: ["faculty", "admin"] },
   ];
 }
 

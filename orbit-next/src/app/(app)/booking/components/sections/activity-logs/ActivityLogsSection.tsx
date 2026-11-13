@@ -1,6 +1,7 @@
 import { Dispatch, SetStateAction, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { format, startOfDay, endOfDay, isWithinInterval, parseISO } from "date-fns";
 import { SkeletonListItem } from "@/components/ui/skeleton-presets";
+import { getEquipmentItemNames } from "@shared/equipmentFormatting";
 
 interface ActivityLogsSectionProps {
   activityTab: "booking" | "notifications";
@@ -170,11 +171,7 @@ export function ActivityLogsSection({
                       <span key={idx} className="block">
                         {(() => {
                           const { baseMessage, equipment } = parseEquipmentFromMessage(line);
-                          const equipmentItems = equipment && typeof equipment === "object"
-                            ? Array.isArray(equipment.items)
-                              ? equipment.items
-                              : Object.keys(equipment).filter((key) => key !== "others")
-                            : [];
+                          const equipmentItems = getEquipmentItemNames(equipment);
                           return (
                             <>
                               {baseMessage}
