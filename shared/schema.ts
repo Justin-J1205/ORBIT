@@ -139,6 +139,7 @@ export const facilityBookings = pgTable("facility_bookings", {
   arrivalConfirmed: boolean("arrival_confirmed").default(false),
   status: varchar("status").default("pending").notNull(),
   adminId: varchar("admin_id").references(() => users.id),
+  forceStartReason: text("force_start_reason"),
   adminResponse: text("admin_response"),
   reminderOptIn: boolean("reminder_opt_in").default(true).notNull(),
   reminderStatus: varchar("reminder_status").default("pending").notNull(),
@@ -291,11 +292,12 @@ export const insertFacilityBookingSchema = z.object({
   clientRequestId: z.string().uuid().optional(),
   status: z.enum(["pending", "approved", "denied", "cancelled"]).default("pending"),
   adminId: z.string().optional(),
+  forceStartReason: z.string().max(1000).nullable().optional(),
   adminResponse: z.string().optional(),
   declineReason: z.string().max(1000).nullable().optional(),
   cancellationReason: z.string().max(1000).nullable().optional(),
   rescheduleReason: z.string().max(1000).nullable().optional(),
-  equipmentRequestStatus: z.enum(["pending", "approved", "denied"]).nullable().optional(),
+  equipmentRequestStatus: z.enum(["pending", "approved", "denied", "declined", "partially_approved"]).nullable().optional(),
   equipmentDeclineReason: z.string().max(1000).nullable().optional(),
 });
 

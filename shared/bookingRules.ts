@@ -16,4 +16,5 @@ export const ACADEMIC_PROGRAM_OPTIONS = [
   "Liberal Arts",
   "Nutrition & Dietetics Hotel & Restaurant Mgt.",
   "Faculty",
+  "Admin",
 ] as const;
