@@ -1,5 +1,3 @@
-
-
 create extension if not exists pgcrypto;
 
 do $$
@@ -99,6 +97,7 @@ create table if not exists public."facility_bookings" (
   "end_time" timestamp without time zone not null,
   "purpose" text not null,
   "participants" integer not null,
+  "course_year_dept" text,
   "name" character varying(200),
   "program" character varying(100),
   "equipment" jsonb,
@@ -108,6 +107,7 @@ create table if not exists public."facility_bookings" (
   "reschedule_reason" text,
   "equipment_request_status" character varying,
   "equipment_decline_reason" text,
+  "force_start_reason" text,
   "arrival_confirmation_deadline" timestamp without time zone,
   "arrival_confirmed" boolean default false,
   "status" character varying default 'pending'::character varying not null,
@@ -304,13 +304,3 @@ alter table public."users"
   drop constraint if exists "users_email_unique";
 alter table public."users"
   add constraint "users_email_unique" UNIQUE (email);
-
-CREATE UNIQUE INDEX booking_reminders_booking_id_unique ON public.booking_reminders USING btree (booking_id);
-
-CREATE UNIQUE INDEX campuses_name_unique ON public.campuses USING btree (name);
-
-CREATE UNIQUE INDEX computer_stations_name_unique ON public.computer_stations USING btree (name);
-
-CREATE UNIQUE INDEX equipment_inventory_key_unique ON public.equipment_inventory USING btree (key);
-
-CREATE UNIQUE INDEX users_email_unique ON public.users USING btree (email);
